@@ -25,7 +25,20 @@ The kernel is intentionally explicit that:
 
 ## Package entry
 
-`src/index.js` re-exports the kernel surface.
+`src/index.js` exposes namespaced domain surfaces plus a small flat compatibility surface for common core helpers.
+
+Compatibility note:
+
+- A small flat compatibility surface exists for core helpers only:
+  - `createObserver`, `createContinuity`, `createHappening`, `appendAdmittedHappening`,
+    `evaluateAdmittance`, `deriveState`, `admittedReceipt`, `rejectedReceipt`, `deferredReceipt`
+- Domain adapters should be reached through namespaces:
+  - `poo.domains.seatMap`
+  - `poo.rbc`
+  - `poo.projection`
+  - `poo.checkpoints`
+  - `poo.seeds`
+  - `poo.joins`
 
 ## Invariants and defaults
 
@@ -40,9 +53,10 @@ The kernel is intentionally explicit that:
   - `seat-occupied`
   - `seat-vacated`
   - `seat-position-changed`
-- projection admission is observational only (`external-seat-projection-admitted`),
-  while projected action admissibility is derived from the local continuation plus source seat continuity.
-- `admitExternalReferent` may optionally project referents with source-relative offsets when source continuity is provided.
+- projection admission is observational only (`external-seat-projection-admitted`).
+- projection-relative realization maps source referents through an occupied source seat.
+- delegated action requires a future admitted seat-entry grant or RBC referee rule.
+- `admitExternalReferent` split into `admitExternalReferentClaim` (id-level claim only) and `realizeExternalReferent` (projection-relative realization).
 
 ## Quick install
 
@@ -54,20 +68,14 @@ npm test
 ## Quick v2 seat-map flow
 
 ```js
-const {
-  createObserver,
-  createContinuity,
-  createHappening,
-  appendAdmittedHappening,
-  evaluateAdmittance,
-  createSeatMapRulebook,
-  deriveSeatMapState,
-  BRANCH_TYPE,
-} = require("./src");
+const poo = require("./src");
+const { createObserver, createContinuity, createHappening, appendAdmittedHappening } = poo;
+const { createSeatMapRulebook, BRANCH_TYPE, deriveSeatMapState } = poo.domains.seatMap;
 
 const observerA = createObserver({ id: "observerA", branchType: BRANCH_TYPE });
 let continuityA = createContinuity(observerA.id, observerA.branchType);
 const seatRulebook = createSeatMapRulebook();
+const { evaluateAdmittance } = poo;
 
 // Origin seat bootstrap (empty continuity)
 continuityA = appendAdmittedHappening(

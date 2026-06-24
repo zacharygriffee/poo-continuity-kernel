@@ -1,22 +1,33 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
 
+const poo = require("../src");
+
 const {
   createObserver,
   createContinuity,
   createHappening,
   appendAdmittedHappening,
   deriveState,
+} = poo.core;
+
+const {
   createCheckpoint,
   admitCheckpoint,
   validateFromCheckpoint,
+} = poo.checkpoints;
+
+const {
   createContinuitySeed,
   admitContinuitySeed,
   validateTailFromSeed,
+} = poo.seeds;
+
+const {
   createJoinPoint,
   admitJoinPoint,
   validateJoinCandidate,
-} = require("../src");
+} = poo.joins;
 
 function numberReducer(state, event) {
   if (event.kind !== "number-delta") return state;
@@ -85,6 +96,7 @@ test("seed validates source continuity tail", () => {
 
   assert.equal(tail.valid, true);
   assert.equal(admittedSeed.receipt.decision, "admitted");
+  assert.equal(seed.nonClaims.includes("seed fingerprint is not cryptographic integrity"), true);
 });
 
 test("join point can be admitted without history merge", () => {

@@ -1,26 +1,36 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
 
+const poo = require("../src");
+
 const {
   createObserver,
   createContinuity,
-  createRefereeBranch,
-  createRbcReferent,
-  admitRbcReferent,
-  getActiveRbcRules,
   createHappening,
   appendAdmittedHappening,
-  deriveSeatMapState,
   evaluateAdmittance,
+} = poo.core;
+
+const {
+  admitRbcReferent,
+  createRbcReferent,
+  createRefereeBranch,
+  getActiveRbcRules,
   evaluateHappeningAgainstRbc,
+} = poo.rbc;
+
+const {
   deriveActiveSeatContext,
-  admitSeatProjection,
-  admitExternalReferent,
+  createSeatMapRulebook,
   inMap,
   BRANCH_TYPE,
   MAX_STEP,
-  createSeatMapRulebook,
-} = require("../src");
+  deriveSeatMapState,
+} = poo.domains.seatMap;
+
+const {
+  admitSeatProjection,
+} = poo.projection;
 
 function withSeatBranchRbc() {
   const owner = createObserver({ id: "seat-owner", branchType: BRANCH_TYPE });
@@ -77,8 +87,8 @@ test("origin seat bootstraps only on empty continuity", () => {
   let continuity = createContinuity(owner.id, owner.branchType);
   continuity = originBootContinuity(owner);
 
-  assert.equal(deriveSeatMapState(continuity).seatBranchesById["ref-seat-origin"].id, "ref-seat-origin");
-  assert.equal(deriveSeatMapState(continuity).observerSeatByObserverId[owner.id].observerId, owner.id);
+  assert.equal(seatAwareState(continuity).seatBranchesById["ref-seat-origin"].id, "ref-seat-origin");
+  assert.equal(seatAwareState(continuity).observerSeatByObserverId[owner.id].observerId, owner.id);
 });
 
 test("placing a second seat creates a distinct referent id", () => {
@@ -130,7 +140,13 @@ test("B can occupy source seat and act through RBC-constrained seat movement", (
 
   const observerB = createObserver({ id: "observer-b", branchType: BRANCH_TYPE });
   let continuityB = createContinuity(observerB.id, observerB.branchType);
-  continuityB = admitSeatProjection(continuityB, owner.id, projectionSeat, observerB.id, continuityA).continuity;
+  continuityB = admitSeatProjection({
+    localContinuity: continuityB,
+    actorObserverId: observerB.id,
+    sourceObserverId: owner.id,
+    sourceContinuity: continuityA,
+    seatReferentId: projectionSeat,
+  }).continuity;
   const stateB = deriveActiveSeatContext({
     observerId: observerB.id,
     localContinuity: continuityB,
@@ -143,17 +159,6 @@ test("B can occupy source seat and act through RBC-constrained seat movement", (
   assert.equal(stateB.mode, "projection-only");
   assert.equal(stateB.sourceSeatReferentId, projectionSeat);
 
-  // projection mode allows observe-only in this baseline
-  const observeAttempt = admitExternalReferent(
-    continuityB,
-    owner.id,
-    "ref-seat-origin",
-    observerB.id,
-    continuityA
-  );
-  assert.equal(observeAttempt.receipt.decision, "admitted");
-
-  // movement with projection-derived seat context should be allowed under rulebook/RBC checks
   const moveDecision = evaluateAdmittance({
     continuity: continuityB,
     happening: createHappening({
@@ -176,13 +181,16 @@ test("B can occupy source seat and act through RBC-constrained seat movement", (
   assert.equal(moveDecision.decision, "admitted");
 
   if (moveDecision.decision === "admitted") {
-    continuityB = appendAdmittedHappening(continuityB, createHappening({
-      actorObserverId: observerB.id,
-      kind: "seat-position-changed",
-      seatReferentId: projectionSeat,
-      from: { slot: "center", row: 5 },
-      to: { slot: "right", row: 5 },
-    }));
+    continuityB = appendAdmittedHappening(
+      continuityB,
+      createHappening({
+        actorObserverId: observerB.id,
+        kind: "seat-position-changed",
+        seatReferentId: projectionSeat,
+        from: { slot: "center", row: 5 },
+        to: { slot: "right", row: 5 },
+      })
+    );
   }
 
   assert.equal(deriveSeatMapState(continuityB).seatBranchesById[projectionSeat].slot, "right");
@@ -216,7 +224,7 @@ test("seat-position-changed in RBC with out-of-bounds is rejected", () => {
   assert.equal(decision.decision, "rejected");
 });
 
-test("v2 derive ignores legacy legacy seat verbs", () => {
+test("v2 derive ignores legacy seat verbs", () => {
   const owner = createObserver({ id: "legacy-owner", branchType: BRANCH_TYPE });
   let continuity = createContinuity(owner.id, owner.branchType);
   continuity = appendAdmittedHappening(

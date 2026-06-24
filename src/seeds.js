@@ -3,7 +3,7 @@ const { appendAdmittedHappening } = require("./continuity");
 const { admittedReceipt, rejectedReceipt } = require("./receipts");
 const { EVENT_KIND_CONTINUITY_SEED_ADMITTED } = require("./event-kinds");
 
-function computeContinuitySliceHash(events) {
+function computeDemoSliceFingerprint(events) {
   if (!Array.isArray(events)) return "";
   return events
     .map((event) => String(event.id || event.happeningId || ""))
@@ -35,11 +35,15 @@ function createContinuitySeed(continuity, startIndex, endIndex, options = {}) {
     endIndex,
     startState: optionsSafe.startState || null,
     endState: optionsSafe.endState || null,
-    startTailHash: computeContinuitySliceHash(startSlice),
-    endTailHash: computeContinuitySliceHash(seedSlice),
+    startTailHash: computeDemoSliceFingerprint(startSlice),
+    endTailHash: computeDemoSliceFingerprint(seedSlice),
     requiredHappenings: seedSlice.map((event) => event.id),
     stateReducer: optionsSafe.stateReducer ? "stateReducer-provided" : null,
-    nonClaims: ["seed is bounded alignment only, not canonical history"],
+    nonClaims: [
+      "seed is bounded alignment only, not canonical history",
+      "seed fingerprint is not cryptographic integrity",
+      "demo fingerprint only; not a trust anchor",
+    ],
   };
   return normalized;
 }
@@ -131,13 +135,13 @@ function validateTailFromSeed(observerContinuity, sourceContinuity, seed, option
   const sourceHead = sourceContinuity.events.slice(0, seed.startIndex);
   const sourceTail = sourceContinuity.events.slice(seed.startIndex, seed.endIndex);
 
-  if (computeContinuitySliceHash(sourceHead) !== seed.startTailHash) {
+  if (computeDemoSliceFingerprint(sourceHead) !== seed.startTailHash) {
     return {
       valid: false,
       reasons: ["startTailHash mismatch"],
     };
   }
-  if (computeContinuitySliceHash(sourceTail) !== seed.endTailHash) {
+  if (computeDemoSliceFingerprint(sourceTail) !== seed.endTailHash) {
     return {
       valid: false,
       reasons: ["endTailHash mismatch"],
@@ -190,7 +194,8 @@ function validateTailFromSeed(observerContinuity, sourceContinuity, seed, option
 }
 
 module.exports = {
-  computeContinuitySliceHash,
+  computeDemoSliceFingerprint,
+  computeContinuitySliceHash: computeDemoSliceFingerprint,
   createContinuitySeed,
   admitContinuitySeed,
   validateTailFromSeed,

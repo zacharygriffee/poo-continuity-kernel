@@ -1,21 +1,29 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
 
+const poo = require("../src");
+
 const {
   createObserver,
   createContinuity,
-  appendAdmittedHappening,
   createHappening,
+  appendAdmittedHappening,
   deriveState,
   evaluateAdmittance,
   nextReferentId,
+} = poo.core;
+
+const {
   createReferent,
+} = poo.core;
+
+const {
   createRbcReferent,
   createRefereeBranch,
   admitRbcReferent,
   getActiveRbcRules,
   evaluateHappeningAgainstRbc,
-} = require("../src");
+} = poo.rbc;
 
 function numberReducer(state, event) {
   if (event.kind === "number-delta") {
@@ -29,6 +37,15 @@ function numberReducer(state, event) {
 function buildAccepted(continuity, happening) {
   return appendAdmittedHappening(continuity, happening);
 }
+
+test("public API is namespaced", () => {
+  assert.ok(poo.core.createContinuity);
+  assert.ok(poo.rbc.createRbcReferent);
+  assert.ok(poo.projection.admitSeatProjection);
+  assert.ok(poo.domains.seatMap.deriveSeatMapState);
+  assert.equal(typeof poo.createSeatMapRulebook, "undefined");
+  assert.equal(typeof poo.admitExternalReferent, "undefined");
+});
 
 test("continuity bootstrap and state derivation", () => {
   const obs = createObserver({ id: "obs-1", branchType: "number-branch" });
@@ -61,6 +78,23 @@ test("evaluate admissibility default accepts valid event", () => {
   });
 
   assert.equal(decision.decision, "admitted");
+});
+
+test("evaluateAdmittance can default to deferred", () => {
+  const obs = createObserver({ id: "obs-deferred", branchType: "number-branch" });
+  const continuity = createContinuity(obs.id, obs.branchType);
+  const decision = evaluateAdmittance({
+    continuity,
+    happening: createHappening({
+      actorObserverId: obs.id,
+      kind: "number-delta",
+      payload: { delta: 1 },
+    }),
+    state: { value: 0 },
+    defaultDecision: "deferred",
+  });
+
+  assert.equal(decision.decision, "deferred");
 });
 
 test("admitted happen by RBC with deterministic IDs", () => {

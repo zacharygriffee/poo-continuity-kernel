@@ -1,15 +1,17 @@
 const { createHappening } = require("./happenings");
 const { appendAdmittedHappening } = require("./continuity");
 const { admittedReceipt, rejectedReceipt } = require("./receipts");
-const { EVENT_KIND_EXTERNAL_SEAT_PROJECTION_ADMITTED, EVENT_KIND_EXTERNAL_REFERENT_ADMITTED } = require("./event-kinds");
+const {
+  EVENT_KIND_EXTERNAL_SEAT_PROJECTION_ADMITTED,
+  EVENT_KIND_EXTERNAL_REFERENT_ADMITTED,
+} = require("./event-kinds");
 const {
   deriveSeatMapState,
   deriveActiveSeatContext,
-  inMap,
-  resolveActorSeatContext,
   computeOffset,
   applyOffset,
-  slotIndex,
+  inMap,
+  BRANCH_TYPE,
 } = require("./seat-map-domain");
 
 function createProjectionReferent(input = {}) {
@@ -51,7 +53,7 @@ function validateSeatProjectionSource(sourceContinuity, sourceObserverId, seatRe
     };
   }
 
-  if (sourceContinuity.branchType && sourceContinuity.branchType !== "seat-dag-continuity-v2") {
+  if (sourceContinuity.branchType && sourceContinuity.branchType !== BRANCH_TYPE) {
     return {
       valid: false,
       reasons: ["source continuity is not seat-map v2 branch"],
@@ -97,89 +99,41 @@ function sourceSeatSnapshotFromState(sourceContinuity, seatReferentId) {
     sourceSeatId: seatReferentId,
     sourceObserverId: sourceContinuity.ownerObserverId,
   };
-};
-
-function normalizeAdmitSeatProjectionArgs(localContinuity, sourceOrObserverId, seatOrSourceObserverId, maybeSeatOrActorId, maybeActorOrSourceContinuity) {
-  const actorFromContinuity = String(localContinuity?.ownerObserverId || "unknown").trim();
-
-  if (typeof sourceOrObserverId === "string") {
-    const sourceContinuity =
-      typeof maybeActorOrSourceContinuity === "object" && maybeActorOrSourceContinuity !== null
-        ? maybeActorOrSourceContinuity
-        : undefined;
-
-    return {
-      actorObserverId: sourceContinuity
-        ? String(maybeSeatOrActorId || actorFromContinuity).trim() || actorFromContinuity
-        : String(
-            typeof maybeActorOrSourceContinuity !== "undefined" ? maybeActorOrSourceContinuity : actorFromContinuity
-          )
-            .trim()
-            .trim() || actorFromContinuity,
-      sourceObserverId: String(sourceOrObserverId || "").trim(),
-      seatReferentId: String(seatOrSourceObserverId || "").trim(),
-      sourceContinuity,
-    };
-  }
-
-  if (typeof sourceOrObserverId === "object" && sourceOrObserverId !== null) {
-    return {
-      actorObserverId: String(maybeSeatOrActorId || actorFromContinuity).trim() || actorFromContinuity,
-      sourceObserverId: String(seatOrSourceObserverId || "").trim(),
-      seatReferentId: String(maybeActorOrSourceContinuity || "").trim(),
-      sourceContinuity: sourceOrObserverId,
-    };
-  }
-
-  return {
-    actorObserverId: actorFromContinuity,
-    sourceObserverId: "",
-    seatReferentId: "",
-    sourceContinuity: undefined,
-  };
 }
 
-function admitSeatProjection(localContinuity, sourceOrObserverId, seatOrSourceObserverId, maybeSeatOrActorId, maybeActorOrSourceContinuity) {
+function admitSeatProjection({ localContinuity, actorObserverId, sourceObserverId, sourceContinuity, seatReferentId }) {
   if (!localContinuity || !localContinuity.ownerObserverId) {
     return {
       continuity: localContinuity,
       receipt: rejectedReceipt({
         observerId: localContinuity?.ownerObserverId || "unknown",
+        actorObserverId: String(actorObserverId || "").trim() || localContinuity?.ownerObserverId || "unknown",
         reasons: ["local continuity is required"],
       }),
     };
   }
 
-  const parsed = normalizeAdmitSeatProjectionArgs(
-    localContinuity,
-    sourceOrObserverId,
-    seatOrSourceObserverId,
-    maybeSeatOrActorId,
-    maybeActorOrSourceContinuity
-  );
+  const actor = String(actorObserverId || localContinuity.ownerObserverId || "").trim();
+  const source = String(sourceObserverId || "").trim();
+  const seat = String(seatReferentId || "").trim();
 
-  const actorObserverId = parsed.actorObserverId;
-  const sourceObserverId = parsed.sourceObserverId;
-  const seatReferentId = parsed.seatReferentId;
-  const sourceContinuity = parsed.sourceContinuity;
-
-  if (!sourceObserverId) {
+  if (!source) {
     return {
       continuity: localContinuity,
       receipt: rejectedReceipt({
         observerId: localContinuity.ownerObserverId,
-        actorObserverId,
+        actorObserverId: actor,
         reasons: ["sourceObserverId is required"],
       }),
     };
   }
 
-  if (!seatReferentId) {
+  if (!seat) {
     return {
       continuity: localContinuity,
       receipt: rejectedReceipt({
         observerId: localContinuity.ownerObserverId,
-        actorObserverId,
+        actorObserverId: actor,
         reasons: ["seatReferentId is required"],
       }),
     };
@@ -190,45 +144,45 @@ function admitSeatProjection(localContinuity, sourceOrObserverId, seatOrSourceOb
       continuity: localContinuity,
       receipt: rejectedReceipt({
         observerId: localContinuity.ownerObserverId,
-        actorObserverId,
+        actorObserverId: actor,
         reasons: ["sourceContinuity is required for projection admission"],
       }),
     };
   }
 
-  if (hasProjectionEventForSeat(localContinuity, actorObserverId, sourceObserverId, seatReferentId)) {
+  if (hasProjectionEventForSeat(localContinuity, actor, source, seat)) {
     return {
       continuity: localContinuity,
       receipt: rejectedReceipt({
         observerId: localContinuity.ownerObserverId,
-        actorObserverId,
+        actorObserverId: actor,
         reasons: ["Projection already admitted for this source/seat"],
       }),
     };
   }
 
-  const sourceValidation = validateSeatProjectionSource(sourceContinuity, sourceObserverId, seatReferentId);
+  const sourceValidation = validateSeatProjectionSource(sourceContinuity, source, seat);
   if (!sourceValidation.valid) {
     return {
       continuity: localContinuity,
       receipt: rejectedReceipt({
         observerId: localContinuity.ownerObserverId,
-        actorObserverId,
+        actorObserverId: actor,
         reasons: sourceValidation.reasons,
       }),
     };
   }
 
   const projectionEvent = createHappening({
-    actorObserverId,
+    actorObserverId: actor,
     kind: EVENT_KIND_EXTERNAL_SEAT_PROJECTION_ADMITTED,
-    sourceObserverId,
-    throughSeatReferentId: seatReferentId,
-    sourceSeatReferentId: seatReferentId,
+    sourceObserverId: source,
+    throughSeatReferentId: seat,
+    sourceSeatReferentId: seat,
     payload: {
-      sourceObserverId,
-      seatReferentId,
-      sourceSeatSnapshot: sourceSeatSnapshotFromState(sourceContinuity, seatReferentId),
+      sourceObserverId: source,
+      seatReferentId: seat,
+      sourceSeatSnapshot: sourceSeatSnapshotFromState(sourceContinuity, seat),
     },
   });
 
@@ -236,21 +190,117 @@ function admitSeatProjection(localContinuity, sourceOrObserverId, seatOrSourceOb
     continuity: appendAdmittedHappening(localContinuity, projectionEvent),
     receipt: admittedReceipt({
       observerId: localContinuity.ownerObserverId,
-      actorObserverId,
+      actorObserverId: actor,
       happeningId: projectionEvent.id,
-      seatReferentId,
-      sourceObserverId,
+      parentHappeningId: projectionEvent.parentHappeningId || null,
+      seatReferentId: seat,
+      sourceObserverId: source,
       reasons: ["seat projection admitted for local continuity context"],
     }),
   };
 }
 
-function admitExternalReferent(localContinuity, sourceObserverId, referentId, actorObserverId, sourceContinuity, options = {}) {
+function admitSeatProjectionLegacy(localContinuity, sourceObserverId, seatReferentId, actorObserverId, sourceContinuity) {
+  return admitSeatProjection({
+    localContinuity,
+    sourceObserverId,
+    sourceContinuity,
+    seatReferentId,
+    actorObserverId,
+  });
+}
+
+function admitExternalReferentClaim({ localContinuity, actorObserverId, sourceObserverId, referentId }) {
   if (!localContinuity || !localContinuity.ownerObserverId) {
     return {
       continuity: localContinuity,
       receipt: rejectedReceipt({
-        observerId: actorObserverId || "unknown",
+        observerId: localContinuity?.ownerObserverId || "unknown",
+        actorObserverId: String(actorObserverId || "").trim() || localContinuity?.ownerObserverId || "unknown",
+        reasons: ["local continuity is required"],
+      }),
+    };
+  }
+
+  const actor = String(actorObserverId || localContinuity.ownerObserverId).trim();
+  const source = String(sourceObserverId || "").trim();
+  const referent = String(referentId || "").trim();
+
+  if (!source || !referent) {
+    return {
+      continuity: localContinuity,
+      receipt: rejectedReceipt({
+        observerId: localContinuity.ownerObserverId,
+        actorObserverId: actor,
+        reasons: ["sourceObserverId and referentId are required"],
+      }),
+    };
+  }
+
+  const alreadyAdmitted = (localContinuity.events || []).some((event) => {
+    return (
+      event &&
+      event.kind === EVENT_KIND_EXTERNAL_REFERENT_ADMITTED &&
+      event.actorObserverId === actor &&
+      event.sourceObserverId === source &&
+      event.referentId === referent &&
+      event.payload?.claimOnly
+    );
+  });
+
+  if (alreadyAdmitted) {
+    return {
+      continuity: localContinuity,
+      receipt: rejectedReceipt({
+        observerId: localContinuity.ownerObserverId,
+        actorObserverId: actor,
+        reasons: ["external referent claim already admitted"],
+      }),
+    };
+  }
+
+  const claim = createHappening({
+    actorObserverId: actor,
+    kind: EVENT_KIND_EXTERNAL_REFERENT_ADMITTED,
+    sourceObserverId: source,
+    referentId: referent,
+    payload: {
+      claimOnly: true,
+      sourceObserverId: source,
+    },
+  });
+
+  return {
+    continuity: appendAdmittedHappening(localContinuity, claim),
+    receipt: admittedReceipt({
+      observerId: localContinuity.ownerObserverId,
+      actorObserverId: actor,
+      happeningId: claim.id,
+      parentHappeningId: claim.parentHappeningId || null,
+      seatReferentId: claim.seatReferentId || null,
+      sourceObserverId: source,
+      referentId: referent,
+      reasons: ["external referent claim admitted without source realization"],
+      nonClaims: ["claim admission does not prove the source referent exists"],
+    }),
+  };
+}
+
+function realizeExternalReferent({
+  localContinuity,
+  actorObserverId,
+  sourceObserverId,
+  sourceContinuity,
+  referentId,
+  projectionContinuityByObserver = {},
+  context = {},
+}) {
+  if (!localContinuity || !localContinuity.ownerObserverId) {
+    return {
+      continuity: localContinuity,
+      receipt: rejectedReceipt({
+        observerId: localContinuity?.ownerObserverId || "unknown",
+        actorObserverId: String(actorObserverId || "").trim() || localContinuity?.ownerObserverId || "unknown",
         reasons: ["local continuity is required"],
       }),
     };
@@ -259,8 +309,6 @@ function admitExternalReferent(localContinuity, sourceObserverId, referentId, ac
   const actor = String(actorObserverId || localContinuity.ownerObserverId).trim();
   const source = String(sourceObserverId || "").trim();
   const ref = String(referentId || "").trim();
-  const projectionContinuationMap = options.projectionContinuationByObserver || options.projectionContinuityByObserver || {};
-  const maybeContext = options.context || {};
 
   if (!source || !ref) {
     return {
@@ -273,100 +321,101 @@ function admitExternalReferent(localContinuity, sourceObserverId, referentId, ac
     };
   }
 
-  const alreadyAdmitted = (localContinuity.events || []).some((event) => {
-    if (!event || typeof event !== "object") return false;
-    if (event.kind !== EVENT_KIND_EXTERNAL_REFERENT_ADMITTED) return false;
-    return event.actorObserverId === actor && event.sourceObserverId === source && event.referentId === ref;
-  });
-
-  if (alreadyAdmitted) {
+  if (!sourceContinuity || !Array.isArray(sourceContinuity.events)) {
     return {
       continuity: localContinuity,
       receipt: rejectedReceipt({
         observerId: localContinuity.ownerObserverId,
         actorObserverId: actor,
-        reasons: ["External referent already admitted"],
+        reasons: ["source continuity is required for source realization"],
       }),
     };
   }
 
-  const baseEvent = {
-    actorObserverId: actor,
-    kind: EVENT_KIND_EXTERNAL_REFERENT_ADMITTED,
-    sourceObserverId: source,
-    referentId: ref,
-  };
-
-  if (!sourceContinuity || typeof sourceContinuity !== "object") {
+  const sourceOwner = String(sourceContinuity.ownerObserverId || "").trim();
+  if (sourceOwner && sourceOwner !== source) {
     return {
-      continuity: appendAdmittedHappening(localContinuity, createHappening(baseEvent)),
-      receipt: admittedReceipt({
+      continuity: localContinuity,
+      receipt: rejectedReceipt({
         observerId: localContinuity.ownerObserverId,
         actorObserverId: actor,
-        reasons: ["external referent admitted as visible-only"],
-        sourceObserverId: source,
-        referentId: ref,
+        reasons: ["source continuity owner does not match sourceObserverId"],
+      }),
+    };
+  }
+
+  if (sourceContinuity.branchType && String(sourceContinuity.branchType) !== BRANCH_TYPE) {
+    return {
+      continuity: localContinuity,
+      receipt: rejectedReceipt({
+        observerId: localContinuity.ownerObserverId,
+        actorObserverId: actor,
+        reasons: ["source continuity is not seat-map v2 branch"],
+      }),
+    };
+  }
+
+  const localState = context.localState || deriveSeatMapState(localContinuity);
+  const activeContext = deriveActiveSeatContext({
+    observerId: actor,
+    localContinuity,
+    localState,
+    projectionContinuityByObserver: {
+      ...projectionContinuityByObserver,
+      ...(context.projectionContinuityByObserver || {}),
+      [source]: sourceContinuity,
+    },
+  });
+
+  if (!activeContext || activeContext.mode === "invalid" || activeContext.mode === "unseated") {
+    return {
+      continuity: localContinuity,
+      receipt: rejectedReceipt({
+        observerId: localContinuity.ownerObserverId,
+        actorObserverId: actor,
+        reasons: ["active seat context is required to realize external referent"],
+      }),
+    };
+  }
+
+  if (activeContext.mode === "projection-only" && activeContext.sourceObserverId && activeContext.sourceObserverId !== source) {
+    return {
+      continuity: localContinuity,
+      receipt: rejectedReceipt({
+        observerId: localContinuity.ownerObserverId,
+        actorObserverId: actor,
+        reasons: ["active projection source does not match requested source observer"],
+      }),
+    };
+  }
+
+  if (activeContext.mode === "owned-local" && String(localContinuity.ownerObserverId) !== source) {
+    return {
+      continuity: localContinuity,
+      receipt: rejectedReceipt({
+        observerId: localContinuity.ownerObserverId,
+        actorObserverId: actor,
+        reasons: ["local occupied source does not match requested source observer"],
       }),
     };
   }
 
   const sourceState = deriveSeatMapState(sourceContinuity);
-  const sourceReferent = sourceState.referentsById[ref];
-  if (!sourceReferent) {
+  const sourceSeat = sourceState.seatBranchesById[activeContext.sourceSeatReferentId];
+  const localSeat = localState.observerSeatByObserverId[actor];
+
+  if (!sourceSeat || !localSeat) {
     return {
       continuity: localContinuity,
       receipt: rejectedReceipt({
         observerId: localContinuity.ownerObserverId,
         actorObserverId: actor,
-        reasons: ["source referent does not exist"],
+        reasons: ["projection source seat is unavailable for relative mapping"],
       }),
     };
   }
 
-  const activeContext = deriveActiveSeatContext({
-    observerId: actor,
-    localContinuity,
-    localState: maybeContext.localState || deriveSeatMapState(localContinuity),
-    projectionContinuityByObserver: {
-      ...(projectionContinuationMap || {}),
-      [source]: sourceContinuity,
-    },
-  });
-  const seatContext = resolveActorSeatContext(maybeContext.localState || deriveSeatMapState(localContinuity), actor, {
-    projectionContinuityByObserver: {
-      ...(projectionContinuationMap || {}),
-      [source]: sourceContinuity,
-    },
-  });
-
-  const isProjectionMode = activeContext && activeContext.mode === "projection-only";
-
-  if (
-    !activeContext ||
-    activeContext.mode === "unseated" ||
-    !seatContext ||
-    (seatContext.mode === "projection" && !seatContext.slot && !seatContext.row)
-  ) {
-    const admitted = {
-      actorObserverId: actor,
-      kind: EVENT_KIND_EXTERNAL_REFERENT_ADMITTED,
-      sourceObserverId: source,
-      referentId: ref,
-      reasons: ["no active local or projection seat; realization mapped to source-only coordinates"],
-    };
-    return {
-      continuity: appendAdmittedHappening(localContinuity, createHappening(admitted)),
-      receipt: admittedReceipt({
-        observerId: localContinuity.ownerObserverId,
-        actorObserverId: actor,
-        reasons: ["external referent admitted without projection mapping"],
-        sourceObserverId: source,
-        referentId: ref,
-      }),
-    };
-  }
-
-  if (typeof slotIndex(sourceReferent.slot) !== "number" || typeof seatContext.slot !== "string" || !inMap(seatContext.slot, seatContext.row)) {
+  if (!inMap(sourceSeat.slot, sourceSeat.row) || !inMap(localSeat.slot, localSeat.row)) {
     return {
       continuity: localContinuity,
       receipt: rejectedReceipt({
@@ -377,52 +426,27 @@ function admitExternalReferent(localContinuity, sourceObserverId, referentId, ac
     };
   }
 
-  const sourceSeat = isProjectionMode
-    ? sourceContextSeatFromProjection(activeContext) || sourceState.seatBranchesById[activeContext.sourceSeatReferentId]
-    : sourceState.seatBranchesById[seatContext.seatReferentId];
-
-  if (isProjectionMode && !sourceSeat) {
+  const sourceReferent = sourceState.referentsById[ref];
+  if (!sourceReferent || !inMap(sourceReferent.slot, sourceReferent.row)) {
     return {
       continuity: localContinuity,
       receipt: rejectedReceipt({
         observerId: localContinuity.ownerObserverId,
         actorObserverId: actor,
-        reasons: ["projection source seat is unavailable for relative mapping"],
-      }),
-    };
-  }
-
-  if (!isProjectionMode && !sourceSeat) {
-    return {
-      continuity: localContinuity,
-      receipt: rejectedReceipt({
-        observerId: localContinuity.ownerObserverId,
-        actorObserverId: actor,
-        reasons: ["projection mapping requires an active projected seat context"],
-      }),
-    };
-  }
-
-  if (!sourceSeat) {
-    return {
-      continuity: localContinuity,
-      receipt: rejectedReceipt({
-        observerId: localContinuity.ownerObserverId,
-        actorObserverId: actor,
-        reasons: ["projection source seat is unavailable for relative mapping"],
+        reasons: ["source referent does not exist"],
       }),
     };
   }
 
   const offset = computeOffset(sourceSeat.slot, sourceSeat.row, sourceReferent.slot, sourceReferent.row);
-  const projected = applyOffset(seatContext.slot, seatContext.row, offset.dslot, offset.drow);
+  const projected = applyOffset(localSeat.slot, localSeat.row, offset.dslot, offset.drow);
   if (!projected) {
     return {
       continuity: localContinuity,
       receipt: rejectedReceipt({
         observerId: localContinuity.ownerObserverId,
         actorObserverId: actor,
-        reasons: ["realized external referent is outside local RBC map"],
+        reasons: ["realization is outside local RBC map"],
       }),
     };
   }
@@ -434,11 +458,14 @@ function admitExternalReferent(localContinuity, sourceObserverId, referentId, ac
     referentId: ref,
     slot: projected.slot,
     row: projected.row,
-    sourceSeatReferentId: seatContext.seatReferentId,
-    sourceSlot: sourceReferent.slot,
-    sourceRow: sourceReferent.row,
+    sourceSeatReferentId: localSeat.seatReferentId,
+    sourceSeatSlot: sourceSeat.slot,
+    sourceSeatRow: sourceSeat.row,
+    sourceReferentSlot: sourceReferent.slot,
+    sourceReferentRow: sourceReferent.row,
     projectedSlot: projected.slot,
     projectedRow: projected.row,
+    projectionSourceSeatReferentId: sourceSeat.id || activeContext.sourceSeatReferentId,
   });
 
   return {
@@ -447,6 +474,8 @@ function admitExternalReferent(localContinuity, sourceObserverId, referentId, ac
       observerId: localContinuity.ownerObserverId,
       actorObserverId: actor,
       happeningId: resolved.id,
+      parentHappeningId: resolved.parentHappeningId || null,
+      seatReferentId: localSeat.seatReferentId,
       sourceObserverId: source,
       referentId: ref,
       reasons: ["external referent realized through projection-relative mapping"],
@@ -455,40 +484,8 @@ function admitExternalReferent(localContinuity, sourceObserverId, referentId, ac
   };
 }
 
-function sourceContextSeatFromProjection(activeContext) {
-  if (!activeContext || activeContext.mode !== "projection-only") {
-    return null;
-  }
-  const sourceContinuity = activeContext.projectionSourceContinuity;
-  if (!sourceContinuity) {
-    return null;
-  }
-  const sourceState = deriveSeatMapState(sourceContinuity);
-  const seatRef = activeContext.sourceSeatReferentId;
-  return sourceState.seatBranchesById[seatRef] || null;
-}
-
-function realizeExternalReferent(localContinuity, args = {}) {
-  const {
-    sourceObserverId,
-    referentId,
-    actorObserverId,
-    sourceContinuity,
-    projectionContinuityByObserver = {},
-  } = args;
-
-  return admitExternalReferent(
-    localContinuity,
-    sourceObserverId,
-    referentId,
-    actorObserverId,
-    sourceContinuity,
-    {
-      projectionContinuityByObserver,
-      context: {},
-      localState: deriveSeatMapState(localContinuity),
-    }
-  );
+function realizeExternalReferentLegacy(localContinuity, args = {}) {
+  return realizeExternalReferent({ localContinuity, ...args });
 }
 
 function validateProjection(projectionEvent, sourceContinuity) {
@@ -506,12 +503,8 @@ function validateProjection(projectionEvent, sourceContinuity) {
     };
   }
 
-  const sourceObserverId = String(
-    projectionEvent.sourceObserverId || projectionEvent.payload?.sourceObserverId || ""
-  ).trim();
-  const seatReferentId = String(
-    projectionEvent.seatReferentId || projectionEvent.payload?.seatReferentId || ""
-  ).trim();
+  const sourceObserverId = String(projectionEvent.sourceObserverId || projectionEvent.payload?.sourceObserverId || "").trim();
+  const seatReferentId = String(projectionEvent.seatReferentId || projectionEvent.payload?.seatReferentId || "").trim();
 
   if (!sourceObserverId || !seatReferentId) {
     return {
@@ -534,8 +527,10 @@ function rejectWriteThroughProjection(action = "write", actorObserverId = "unkno
 module.exports = {
   createProjectionReferent,
   admitSeatProjection,
-  admitExternalReferent,
+  admitSeatProjectionLegacy,
+  admitExternalReferentClaim,
   realizeExternalReferent,
+  admitExternalReferentLegacy: realizeExternalReferentLegacy,
   validateProjection,
   rejectWriteThroughProjection,
   sourceSeatSnapshotFromState,

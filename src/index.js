@@ -24,20 +24,34 @@ try {
 }
 
 module.exports = {
-  ...continuity,
-  ...happenings,
-  ...referents,
-  ...receipts,
-  ...rbc,
-  ...projection,
-  ...seatMapDomain,
-  ...checkpoints,
-  ...seeds,
-  ...joins,
-  ...ids,
+  core: {
+    ...continuity,
+    ...happenings,
+    ...referents,
+    ...ids,
+  },
+  receipts,
+  rbc,
+  projection,
+  checkpoints,
+  seeds,
+  joins,
+  domains: {
+    seatMap: seatMapDomain,
+  },
   adapters: {
     memory: memoryAdapter,
     localstorage: localStorageAdapter,
     fs: fsAdapter,
   },
 };
+
+module.exports.createObserver = referents.createObserver;
+module.exports.createContinuity = continuity.createContinuity;
+module.exports.createHappening = happenings.createHappening;
+module.exports.appendAdmittedHappening = continuity.appendAdmittedHappening;
+module.exports.evaluateAdmittance = continuity.evaluateAdmittance;
+module.exports.deriveState = continuity.deriveState;
+module.exports.admittedReceipt = receipts.admittedReceipt;
+module.exports.rejectedReceipt = receipts.rejectedReceipt;
+module.exports.deferredReceipt = receipts.deferredReceipt;

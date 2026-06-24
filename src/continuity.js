@@ -94,6 +94,7 @@ function evaluateAdmittance({
   evaluateRbc,
   rulebook,
   context = {},
+  defaultDecision = "admitted",
 }) {
   const resolvedObserverId = String(observerId || continuity?.ownerObserverId || "unknown").trim();
 
@@ -162,6 +163,8 @@ function evaluateAdmittance({
     }
   }
 
+  const normalizedDefault = String(defaultDecision || "admitted").trim() === "deferred" ? "deferred" : "admitted";
+
   if (typeof rulebook === "function") {
     const ruleDecision = normalizeEvaluationDecision(
       rulebook(normalized, state, {
@@ -193,6 +196,18 @@ function evaluateAdmittance({
         reasons: ruleDecision.reasons,
       });
     }
+  }
+
+  if (normalizedDefault === "deferred") {
+    return deferredReceipt({
+      observerId: continuity.ownerObserverId,
+      actorObserverId,
+      happeningId,
+      parentHappeningId,
+      seatReferentId,
+      reasons: ["default decision is deferred and no admission rule admitted this happening"],
+      nonClaims: ["default policy choice was deferred"],
+    });
   }
 
   return admittedReceipt({
