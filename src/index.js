@@ -9,6 +9,7 @@ const checkpoints = require("./checkpoints");
 const seeds = require("./seeds");
 const joins = require("./joins");
 const ids = require("./ids");
+const storage = require("./storage");
 const memoryAdapter = require("../adapters/memory");
 let localStorageAdapter;
 try {
@@ -36,6 +37,7 @@ module.exports = {
   checkpoints,
   seeds,
   joins,
+  storage,
   domains: {
     seatMap: seatMapDomain,
   },

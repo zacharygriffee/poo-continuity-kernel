@@ -45,6 +45,10 @@ function createFileStore({ rootDir = ".poo-continuity-store" } = {}) {
     return continuity;
   }
 
+  async function loadContinuity(observerId, branchType = "default-continuity") {
+    return getContinuity(observerId, branchType);
+  }
+
   function saveContinuity(continuity) {
     assertContinuity(continuity);
     ensureRoot();
@@ -68,6 +72,45 @@ function createFileStore({ rootDir = ".poo-continuity-store" } = {}) {
     return continuity;
   }
 
+  async function removeContinuity(observerId, branchType = "default-continuity") {
+    ensureRoot();
+    const file = path.join(resolvedRoot, continuityKey(observerId, branchType));
+    if (fs.existsSync(file)) {
+      fs.unlinkSync(file);
+    }
+  }
+
+  async function listContinuities({ branchType } = {}) {
+    ensureRoot();
+    const continuities = [];
+    for (const name of fs.readdirSync(resolvedRoot)) {
+      if (!name.endsWith(".json")) continue;
+      const full = path.join(resolvedRoot, name);
+      if (!fs.lstatSync(full).isFile()) continue;
+      const parsed = JSON.parse(fs.readFileSync(full, "utf8"));
+      const continuity = normalizeContinuity(parsed, parsed?.ownerObserverId || "unknown", parsed?.branchType);
+      assertContinuity(continuity);
+      if (branchType && continuity.branchType !== branchType) continue;
+      continuities.push(continuity);
+    }
+    return continuities;
+  }
+
+  async function* streamContinuity(observerId, branchType = "default-continuity") {
+    const continuity = getContinuity(observerId, branchType);
+    for (const event of continuity?.events || []) {
+      yield event;
+    }
+  }
+
+  async function appendHappening(observerId, branchType = "default-continuity", happening) {
+    const { createContinuity, appendAdmittedHappening } = require("../src/continuity");
+    const current = getContinuity(observerId, branchType) || createContinuity(observerId, branchType);
+    const next = appendAdmittedHappening(current, happening);
+    saveContinuity(next);
+    return next;
+  }
+
   function clear() {
     if (!fs.existsSync(resolvedRoot)) {
       return;
@@ -83,7 +126,12 @@ function createFileStore({ rootDir = ".poo-continuity-store" } = {}) {
 
   return {
     getContinuity,
+    loadContinuity,
     saveContinuity,
+    removeContinuity,
+    listContinuities,
+    streamContinuity,
+    appendHappening,
     clear,
   };
 }

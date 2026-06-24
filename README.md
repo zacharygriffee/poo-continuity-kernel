@@ -14,7 +14,7 @@ claiming global truth.
 - seat-map domain adapter for seat-based continuity (`seat-dag-continuity-v2`)
 - projection/cross-reality primitives (`external-seat-projection-admitted`, `external-referent-admitted`)
 - alignment aids (`checkpoint`, `seed`, `join`) without history merge semantics
-- adapter-style storage (`memory`, `localStorage`, `fs`)
+- async-first storage adapters (`memory`, `localStorage`, `fs`) and lazy event stream helpers
 
 The kernel is intentionally explicit that:
 
@@ -47,6 +47,8 @@ Compatibility note:
 - `appendEvent` and `appendAdmittedHappening` are immutable transforms; source inputs are never mutated.
 - `appendAdmittedHappening` rejects duplicate happening ids within the same continuity to keep replay identity stable.
 - `evaluateAdmittance(...)` returns a receipt with deterministic decisions (`admitted`, `rejected`, `deferred`) and metadata.
+- storage adapters are async-first convenience surfaces; storage remains substrate, not reality.
+- event streams are candidate replay sources; admission and derivation still come from kernel rules.
 - `seat-dag-continuity-v2` is the canonical seat-map branch type for seat behavior.
 - V1 or legacy seat payloads are ignored when deriving seat-map state from non-v2 continuity.
 - seats are `referent-created` with `type: "seat"` and movement verbs are
@@ -126,6 +128,7 @@ if (decision.decision === "admitted") {
 
 - `continuity.js`: continuity builders, immutability, admissibility evaluation, state reduction
 - `happenings.js`: event shape helpers (`createHappening`, `ensureHappeningIdentity`)
+- `storage.js`: async continuity store contract, stream normalization, stream replay helpers
 - `rbc.js`: referee/rule evaluation helpers
 - `seat-map-domain.js`: seat-map derivation and rulebook for continuity branching
 - `projection.js`: seat projection and external referent admission
@@ -138,6 +141,34 @@ if (decision.decision === "admitted") {
 - `adapters/memory.js`
 - `adapters/localstorage.js`
 - `adapters/fs.js`
+
+Adapters expose the async continuity store shape:
+
+```js
+const store = poo.adapters.memory.createMemoryStore();
+
+await store.saveContinuity(continuity);
+const loaded = await store.loadContinuity("observerA", "seat-dag-continuity-v2");
+const allSeatContinuities = await store.listContinuities({ branchType: "seat-dag-continuity-v2" });
+
+for await (const event of store.streamContinuity("observerA", "seat-dag-continuity-v2")) {
+  // lazy replay input, not canonical truth
+}
+```
+
+For custom substrates, wrap async storage functions:
+
+```js
+const store = poo.storage.createAsyncContinuityStore({
+  async loadContinuity(ownerObserverId, branchType) {},
+  async saveContinuity(continuity) {},
+  async removeContinuity(ownerObserverId, branchType) {},
+  async listContinuities({ branchType } = {}) {},
+  streamContinuity(ownerObserverId, branchType) {
+    return someAsyncIterableOfEvents;
+  },
+});
+```
 
 ## Repository layout
 
