@@ -1,0 +1,22 @@
+{
+  "name": "poo-continuity-kernel",
+  "version": "0.1.0",
+  "private": false,
+  "description": "Small kernel for observer-owned continuity, admissible happenings, receipts, and referee surfaces.",
+  "type": "commonjs",
+  "main": "src/index.js",
+  "scripts": {
+    "check": "node --check src/index.js",
+    "test": "node --test"
+  },
+  "license": "MIT",
+  "keywords": [
+    "continuity",
+    "observability",
+    "admittance",
+    "ontology",
+    "projection",
+    "reality",
+    "rbc"
+  ]
+}

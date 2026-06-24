@@ -1,0 +1,43 @@
+const continuity = require("./continuity");
+const happenings = require("./happenings");
+const referents = require("./referents");
+const receipts = require("./receipts");
+const rbc = require("./rbc");
+const projection = require("./projection");
+const seatMapDomain = require("./seat-map-domain");
+const checkpoints = require("./checkpoints");
+const seeds = require("./seeds");
+const joins = require("./joins");
+const ids = require("./ids");
+const memoryAdapter = require("../adapters/memory");
+let localStorageAdapter;
+try {
+  localStorageAdapter = require("../adapters/localstorage");
+} catch (error) {
+  localStorageAdapter = null;
+}
+let fsAdapter;
+try {
+  fsAdapter = require("../adapters/fs");
+} catch (error) {
+  fsAdapter = null;
+}
+
+module.exports = {
+  ...continuity,
+  ...happenings,
+  ...referents,
+  ...receipts,
+  ...rbc,
+  ...projection,
+  ...seatMapDomain,
+  ...checkpoints,
+  ...seeds,
+  ...joins,
+  ...ids,
+  adapters: {
+    memory: memoryAdapter,
+    localstorage: localStorageAdapter,
+    fs: fsAdapter,
+  },
+};
