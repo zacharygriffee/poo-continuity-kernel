@@ -8,6 +8,10 @@ const seatMapDomain = require("./seat-map-domain");
 const checkpoints = require("./checkpoints");
 const seeds = require("./seeds");
 const joins = require("./joins");
+const segments = require("./segments");
+const rbcCompatibility = require("./rbc-compatibility");
+const topology = require("./topology");
+const blends = require("./blends");
 const ids = require("./ids");
 const storage = require("./storage");
 const memoryAdapter = require("../adapters/memory");
@@ -37,6 +41,12 @@ module.exports = {
   checkpoints,
   seeds,
   joins,
+  segments,
+  rbcCompatibility,
+  topology,
+  experimental: {
+    blends,
+  },
   storage,
   domains: {
     seatMap: seatMapDomain,

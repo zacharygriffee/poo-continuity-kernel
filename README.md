@@ -134,6 +134,16 @@ if (decision.decision === "admitted") {
 }
 ```
 
+## Continuity topology
+
+The first-pass topology layer provides bounded primitives for relating continuities without generic merge semantics. See [Continuity Topology](docs/continuity-topology.md) and [Segment Compatibility](docs/segment-compatibility.md).
+
+- segment policies describe how much history an observer/RBC requires for compatibility.
+- bridge/portal candidates validate explicit endpoints and do not merge histories.
+- mount/nesting candidates validate parent/child surfaces and do not absorb child continuity.
+- overlap checks produce conflict reports delegated by domain rulebooks.
+- experimental blend candidates are admission candidates, not causal proof or automatic history concatenation.
+
 ## Modules
 
 - `continuity.js`: continuity builders, immutability, admissibility evaluation, state reduction

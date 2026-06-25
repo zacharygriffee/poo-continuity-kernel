@@ -43,8 +43,14 @@ test("public API is namespaced", () => {
   assert.ok(poo.rbc.createRbcReferent);
   assert.ok(poo.projection.admitSeatProjection);
   assert.ok(poo.domains.seatMap.deriveSeatMapState);
+  assert.ok(poo.segments.createSegmentCompatibilityPolicy);
+  assert.ok(poo.rbcCompatibility.createRbcDescriptor);
+  assert.ok(poo.topology.createContinuityBridge);
+  assert.ok(poo.experimental.blends.createBlendCandidate);
   assert.equal(typeof poo.createSeatMapRulebook, "undefined");
   assert.equal(typeof poo.admitExternalReferent, "undefined");
+  assert.equal(typeof poo.createContinuityBridge, "undefined");
+  assert.equal(typeof poo.createBlendCandidate, "undefined");
 });
 
 test("continuity bootstrap and state derivation", () => {
