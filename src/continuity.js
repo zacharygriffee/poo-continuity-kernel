@@ -2,6 +2,13 @@ const { ensureHappeningIdentity, validateHappeningShape } = require("./happening
 const { nextHappeningId, nextReferentId } = require("./ids");
 const { admittedReceipt, rejectedReceipt, deferredReceipt } = require("./receipts");
 
+function cloneJson(value) {
+  if (value === undefined) {
+    return undefined;
+  }
+  return JSON.parse(JSON.stringify(value));
+}
+
 function normalizeEvaluationDecision(decision) {
   if (!decision || typeof decision !== "object") {
     return {
@@ -67,11 +74,14 @@ function appendEvent(continuity, event) {
   if (!event || typeof event !== "object") {
     throw new Error("event must be an object");
   }
+  if (event.id && continuity.events.some((entry) => entry && entry.id === event.id)) {
+    throw new Error(`duplicate happening id ${event.id}`);
+  }
 
   return {
     ...continuity,
     branchType: normalizeBranchType(continuity.branchType),
-    events: [...continuity.events, { ...event }],
+    events: [...continuity.events, cloneJson(event)],
   };
 }
 
@@ -158,6 +168,7 @@ function evaluateAdmittance({
         happeningId,
         parentHappeningId,
         seatReferentId,
+        normalizedHappening: normalized,
         reasons: rbcDecision.reasons,
       });
     }
@@ -182,6 +193,7 @@ function evaluateAdmittance({
         happeningId,
         parentHappeningId,
         seatReferentId,
+        normalizedHappening: normalized,
         reasons: ruleDecision.reasons,
       });
     }
@@ -193,6 +205,7 @@ function evaluateAdmittance({
         happeningId,
         parentHappeningId,
         seatReferentId,
+        normalizedHappening: normalized,
         reasons: ruleDecision.reasons,
       });
     }
@@ -205,6 +218,7 @@ function evaluateAdmittance({
       happeningId,
       parentHappeningId,
       seatReferentId,
+      normalizedHappening: normalized,
       reasons: ["default decision is deferred and no admission rule admitted this happening"],
       nonClaims: ["default policy choice was deferred"],
     });
@@ -216,6 +230,7 @@ function evaluateAdmittance({
     happeningId,
     parentHappeningId,
     seatReferentId,
+    normalizedHappening: normalized,
     reasons: ["admission passes admissibility and rules"],
   });
 }
@@ -247,7 +262,7 @@ function cloneContinuityEnvelope(continuity) {
   return {
     ownerObserverId: continuity.ownerObserverId,
     branchType: normalizeContinuityBranchType(continuity),
-    events: continuity.events.slice(0),
+    events: continuity.events.map((event) => cloneJson(event)),
   };
 }
 
@@ -314,6 +329,7 @@ module.exports = {
   assertContinuity,
   normalizeContinuityBranchType,
   cloneContinuityEnvelope,
+  cloneJson,
   nextHappeningId,
   createReferentId,
 };

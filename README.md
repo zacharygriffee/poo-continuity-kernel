@@ -8,7 +8,7 @@ claiming global truth.
 
 - observer and referent identities
 - continuity chains (`events`)
-- happening normalization + stable identifiers (`h-<observer>-N`, `ref-<observer>-N`)
+- happening normalization + collision-resistant identifiers (`obs-<sha256-random>`, `h-<sha256-random>`, `ref-<sha256-random>`)
 - admissibility receipts (`admitted`, `rejected`, `deferred`)
 - RBC evaluator flow with explicit rule decisions
 - seat-map domain adapter for seat-based continuity (`seat-dag-continuity-v2`)
@@ -53,11 +53,16 @@ Compatibility note:
 ## Invariants and defaults
 
 - `createContinuity(ownerObserverId, branchType)` creates an empty continuity.
+- generated observer, happening, referent, segment, topology, and blend IDs are path-safe SHA-256 digests over cryptographic random bytes.
 - `appendAdmittedHappening(continuity, happening)` normalizes shape and IDs and returns a **new** continuity.
+- `appendEvent` is a low-level compatibility helper only; it does not evaluate admission and rejects duplicate event IDs.
 - `appendEvent` and `appendAdmittedHappening` are immutable transforms; source inputs are never mutated.
 - `appendAdmittedHappening` rejects duplicate happening ids within the same continuity to keep replay identity stable.
 - `evaluateAdmittance(...)` returns a receipt with deterministic decisions (`admitted`, `rejected`, `deferred`) and metadata.
+- If evaluating a raw command object, append `receipt.normalizedHappening` after an admitted receipt so the appended happening ID matches the receipt.
+- `nextEventNumberFromContinuity()` remains exported as a legacy compatibility helper; generated IDs no longer depend on event count or storage order.
 - storage adapters are async-first convenience surfaces; storage remains substrate, not reality.
+- storage adapters return cloned envelopes/events; mutating loaded, listed, or streamed objects does not mutate stored continuity.
 - event streams are candidate replay sources; admission and derivation still come from kernel rules.
 - `seat-dag-continuity-v2` is the canonical seat-map branch type for seat behavior.
 - V1 or legacy seat payloads are ignored when deriving seat-map state from non-v2 continuity.
@@ -143,6 +148,8 @@ The first-pass topology layer provides bounded primitives for relating continuit
 - mount/nesting candidates validate parent/child surfaces and do not absorb child continuity.
 - overlap checks produce conflict reports delegated by domain rulebooks.
 - experimental blend candidates are admission candidates, not causal proof or automatic history concatenation.
+- topology relation descriptors provide a common wrapper for bridge, mount, overlap, and blend-candidate surfaces.
+- validation results expose RBC and segment compatibility detail without turning compatibility into proof.
 
 ## Modules
 

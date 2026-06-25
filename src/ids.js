@@ -1,3 +1,25 @@
+const crypto = require("crypto");
+
+const DEFAULT_RANDOM_BYTES = 32;
+const DEFAULT_DIGEST_LENGTH = 32;
+
+function randomDigest({ bytes = DEFAULT_RANDOM_BYTES, algorithm = "sha256", length = DEFAULT_DIGEST_LENGTH } = {}) {
+  return crypto
+    .createHash(algorithm)
+    .update(crypto.randomBytes(bytes))
+    .digest("hex")
+    .slice(0, length);
+}
+
+function createRandomId(prefix, options = {}) {
+  const normalizedPrefix = String(prefix || "id").trim() || "id";
+  return `${normalizedPrefix}-${randomDigest(options)}`;
+}
+
+function createObserverId(options = {}) {
+  return createRandomId("obs", options);
+}
+
 function nextEventNumberFromContinuity(continuity, prefix) {
   if (!continuity || !Array.isArray(continuity.events)) return 1;
   const owner = String(continuity.ownerObserverId || "");
@@ -16,28 +38,17 @@ function nextEventNumberFromContinuity(continuity, prefix) {
 }
 
 function nextReferentId(continuity) {
-  const owner = String(continuity?.ownerObserverId || "observer");
-  const expectedPrefix = `ref-${owner}-`;
-  let max = 0;
-
-  for (const event of continuity?.events || []) {
-    if (event?.kind !== "referent-created") continue;
-    const raw = String(event?.referentId || "");
-    if (!raw.startsWith(expectedPrefix)) continue;
-    const tail = raw.slice(expectedPrefix.length);
-    const n = Number(tail);
-    if (Number.isInteger(n) && n > max) max = n;
-  }
-
-  return `${expectedPrefix}${max + 1}`;
+  return createRandomId("ref");
 }
 
 function nextHappeningId(continuity) {
-  const owner = String(continuity?.ownerObserverId || "observer");
-  return `h-${owner}-${nextEventNumberFromContinuity(continuity, "h")}`;
+  return createRandomId("h");
 }
 
 module.exports = {
+  createRandomId,
+  createObserverId,
+  randomDigest,
   nextEventNumberFromContinuity,
   nextReferentId,
   nextHappeningId,

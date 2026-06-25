@@ -2,9 +2,9 @@ const { createHappening } = require("./happenings");
 const { appendAdmittedHappening } = require("./continuity");
 const { admittedReceipt, rejectedReceipt } = require("./receipts");
 const { validateRbcCompatibility } = require("./rbc-compatibility");
-const { validateSegmentCompatibility } = require("./segments");
-const { createContinuityConflictReport } = require("./topology");
+const topology = require("./topology");
 const { EVENT_KIND_BLEND_CANDIDATE_ADMITTED } = require("./event-kinds");
+const { createRandomId } = require("./ids");
 
 function normalizeNonClaims(nonClaims) {
   return Array.from(new Set((Array.isArray(nonClaims) ? nonClaims : [])
@@ -18,10 +18,16 @@ function normalizeContinuities(continuities) {
   return [];
 }
 
+function normalizeDescriptors(rbcDescriptors) {
+  if (Array.isArray(rbcDescriptors)) return rbcDescriptors.filter(Boolean);
+  if (rbcDescriptors && typeof rbcDescriptors === "object") return Object.values(rbcDescriptors).filter(Boolean);
+  return [];
+}
+
 function createBlendCandidate(input = {}) {
   return {
     kind: "blend-candidate-referent",
-    blendId: String(input.blendId || "").trim() || `blend-${Date.now()}`,
+    blendId: String(input.blendId || "").trim() || createRandomId("blend"),
     inputContinuities: (Array.isArray(input.inputContinuities) ? input.inputContinuities : []).map((entry) => ({
       continuityId: String(entry.continuityId || "").trim(),
       ownerObserverId: String(entry.ownerObserverId || entry.observerId || "").trim(),
@@ -41,39 +47,12 @@ function createBlendCandidate(input = {}) {
   };
 }
 
-function normalizeDescriptors(rbcDescriptors) {
-  if (Array.isArray(rbcDescriptors)) return rbcDescriptors.filter(Boolean);
-  if (rbcDescriptors && typeof rbcDescriptors === "object") return Object.values(rbcDescriptors).filter(Boolean);
-  return [];
-}
-
-function validateSegments(segmentPolicies, continuities) {
-  const entries = Array.isArray(segmentPolicies) ? segmentPolicies : Object.values(segmentPolicies || {});
-  const reasons = [];
-  const nonClaims = [];
-  for (const entry of entries) {
-    const continuity = entry?.sourceContinuity || entry?.continuity || continuities.find((item) =>
-      !entry?.continuityId || item.continuityId === entry.continuityId || item.ownerObserverId === entry.continuityId
-    );
-    const validation = validateSegmentCompatibility({
-      sourceContinuity: continuity,
-      policy: entry?.policy || entry,
-      checkpoint: entry?.checkpoint,
-      seed: entry?.seed,
-    });
-    reasons.push(...(validation.reasons || []));
-    nonClaims.push(...(validation.nonClaims || []));
-    if (!validation.valid) return { valid: false, reasons, nonClaims: normalizeNonClaims(nonClaims) };
-  }
-  return { valid: true, reasons, nonClaims: normalizeNonClaims(nonClaims) };
-}
-
 function validateBlendCandidate({ blendCandidate, continuities, rbcDescriptors, segmentPolicies, rulebook } = {}) {
   if (!blendCandidate || blendCandidate.kind !== "blend-candidate-referent") {
-    return { valid: false, decision: "rejected", reasons: ["blend candidate kind is invalid"], nonClaims: [] };
+    return topology.rejectedTopologyResult({ relationKind: "blend-candidate", reasons: ["blend candidate kind is invalid"] });
   }
   if (!Array.isArray(blendCandidate.inputContinuities) || blendCandidate.inputContinuities.length < 2) {
-    return { valid: false, decision: "rejected", reasons: ["blend candidate requires at least two input continuities"], nonClaims: blendCandidate.nonClaims };
+    return topology.rejectedTopologyResult({ relationId: blendCandidate.blendId, relationKind: "blend-candidate", reasons: ["blend candidate requires at least two input continuities"], nonClaims: blendCandidate.nonClaims });
   }
 
   const rbc = validateRbcCompatibility({
@@ -83,30 +62,31 @@ function validateBlendCandidate({ blendCandidate, continuities, rbcDescriptors, 
     operationKind: "blend-candidate",
   });
   if (rbc.decision === "incompatible") {
-    return { valid: false, decision: "rejected", reasons: rbc.reasons, rbcCompatibility: rbc, nonClaims: normalizeNonClaims([...blendCandidate.nonClaims, ...rbc.nonClaims]) };
+    return topology.rejectedTopologyResult({ relationId: blendCandidate.blendId, relationKind: "blend-candidate", reasons: rbc.reasons, rbcCompatibility: rbc, nonClaims: [...blendCandidate.nonClaims, ...rbc.nonClaims] });
   }
 
   const continuityList = normalizeContinuities(continuities);
-  const segment = validateSegments(segmentPolicies, continuityList);
+  const segment = topology.validateSegmentPoliciesForContinuities({ segmentPolicies, continuities: continuityList });
   if (!segment.valid) {
-    return { valid: false, decision: "rejected", reasons: segment.reasons, rbcCompatibility: rbc, nonClaims: normalizeNonClaims([...blendCandidate.nonClaims, ...rbc.nonClaims, ...segment.nonClaims]) };
+    return topology.rejectedTopologyResult({ relationId: blendCandidate.blendId, relationKind: "blend-candidate", reasons: segment.reasons, rbcCompatibility: rbc, segmentCompatibility: segment, nonClaims: [...blendCandidate.nonClaims, ...rbc.nonClaims, ...segment.nonClaims] });
   }
 
   if (blendCandidate.conflicts.length > 0) {
-    return { valid: false, decision: "deferred", reasons: ["blend candidate has unresolved conflicts"], conflicts: blendCandidate.conflicts, rbcCompatibility: rbc, nonClaims: normalizeNonClaims([...blendCandidate.nonClaims, ...rbc.nonClaims, ...segment.nonClaims]) };
+    return topology.deferredTopologyResult({ relationId: blendCandidate.blendId, relationKind: "blend-candidate", reasons: ["blend candidate has unresolved conflicts"], conflicts: blendCandidate.conflicts, rbcCompatibility: rbc, segmentCompatibility: segment, nonClaims: [...blendCandidate.nonClaims, ...rbc.nonClaims, ...segment.nonClaims] });
   }
 
   if (typeof rulebook === "function") {
     const decision = rulebook({ operationKind: "blend-candidate", blendCandidate, continuities });
     if (decision && decision.decision !== "admitted") {
       const report = decision.conflictReport || decision.report
-        ? createContinuityConflictReport(decision.conflictReport || decision.report)
+        ? topology.createContinuityConflictReport(decision.conflictReport || decision.report)
         : null;
-      return { valid: false, decision: decision.decision || "rejected", reasons: decision.reasons || ["blend candidate rejected by rulebook"], conflictReport: report, rbcCompatibility: rbc, nonClaims: normalizeNonClaims([...blendCandidate.nonClaims, ...rbc.nonClaims, ...segment.nonClaims]) };
+      const result = decision.decision === "deferred" ? topology.deferredTopologyResult : topology.rejectedTopologyResult;
+      return result({ relationId: blendCandidate.blendId, relationKind: "blend-candidate", reasons: decision.reasons || ["blend candidate rejected by rulebook"], conflictReport: report, rbcCompatibility: rbc, segmentCompatibility: segment, nonClaims: [...blendCandidate.nonClaims, ...rbc.nonClaims, ...segment.nonClaims] });
     }
   }
 
-  return { valid: true, decision: "admitted", reasons: ["blend candidate is compatible for admission flow"], rbcCompatibility: rbc, nonClaims: normalizeNonClaims([...blendCandidate.nonClaims, ...rbc.nonClaims, ...segment.nonClaims]) };
+  return topology.admittedTopologyResult({ relationId: blendCandidate.blendId, relationKind: "blend-candidate", reasons: ["blend candidate is compatible for admission flow"], rbcCompatibility: rbc, segmentCompatibility: segment, nonClaims: [...blendCandidate.nonClaims, ...rbc.nonClaims, ...segment.nonClaims] });
 }
 
 function admitBlendCandidate(localContinuity, blendCandidate, payload = {}) {
@@ -116,21 +96,29 @@ function admitBlendCandidate(localContinuity, blendCandidate, payload = {}) {
   if (!blendCandidate || blendCandidate.kind !== "blend-candidate-referent") {
     return { continuity: localContinuity, receipt: rejectedReceipt({ observerId: localContinuity.ownerObserverId, reasons: ["blend candidate kind is invalid"] }) };
   }
+  const actorObserverId = payload.actorObserverId || localContinuity.ownerObserverId;
   const event = createHappening({
-    actorObserverId: payload.actorObserverId || localContinuity.ownerObserverId,
+    actorObserverId,
+    parentHappeningId: payload.parentHappeningId || null,
     kind: EVENT_KIND_BLEND_CANDIDATE_ADMITTED,
     payload: { blendCandidate, ...payload },
   });
   event.blendId = blendCandidate.blendId;
+  event.relationId = blendCandidate.blendId;
+  event.relationKind = "blend-candidate";
   event.blendCandidate = blendCandidate;
   return {
     continuity: appendAdmittedHappening(localContinuity, event),
     receipt: admittedReceipt({
       observerId: localContinuity.ownerObserverId,
-      actorObserverId: payload.actorObserverId || localContinuity.ownerObserverId,
+      actorObserverId,
       happeningId: event.id,
+      parentHappeningId: event.parentHappeningId,
+      relationId: blendCandidate.blendId,
+      relationKind: "blend-candidate",
+      blendId: blendCandidate.blendId,
       reasons: ["blend candidate admitted locally"],
-      nonClaims: blendCandidate.nonClaims,
+      nonClaims: [...topology.TOPOLOGY_NON_CLAIMS, ...blendCandidate.nonClaims],
     }),
   };
 }

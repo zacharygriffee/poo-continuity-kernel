@@ -7,10 +7,13 @@ const {
   createObserver,
   createContinuity,
   createHappening,
+  appendEvent,
   appendAdmittedHappening,
   deriveState,
   evaluateAdmittance,
   nextReferentId,
+  createObserverId,
+  nextHappeningId,
 } = poo.core;
 
 const {
@@ -86,6 +89,27 @@ test("evaluate admissibility default accepts valid event", () => {
   assert.equal(decision.decision, "admitted");
 });
 
+test("evaluateAdmittance returns normalized happening for raw append correlation", () => {
+  const obs = createObserver({ id: "obs-raw", branchType: "number-branch" });
+  const continuity = createContinuity(obs.id, obs.branchType);
+  const receipt = evaluateAdmittance({
+    continuity,
+    happening: {
+      actorObserverId: obs.id,
+      kind: "number-delta",
+      payload: { delta: 5 },
+    },
+    state: { value: 0 },
+  });
+
+  assert.equal(receipt.decision, "admitted");
+  assert.equal(receipt.normalizedHappening.id, receipt.happeningId);
+  assert.match(receipt.happeningId, /^h-[0-9a-f]{32}$/);
+
+  const next = appendAdmittedHappening(continuity, receipt.normalizedHappening);
+  assert.equal(next.events[0].id, receipt.happeningId);
+});
+
 test("evaluateAdmittance can default to deferred", () => {
   const obs = createObserver({ id: "obs-deferred", branchType: "number-branch" });
   const continuity = createContinuity(obs.id, obs.branchType);
@@ -103,12 +127,18 @@ test("evaluateAdmittance can default to deferred", () => {
   assert.equal(decision.decision, "deferred");
 });
 
-test("admitted happen by RBC with deterministic IDs", () => {
+test("generated ids are crypto-shaped and admission preserves proposed happening id", () => {
+  const generatedObserver = createObserver({ branchType: "number-branch" });
+  assert.match(generatedObserver.id, /^obs-[0-9a-f]{32}$/);
+  assert.match(createObserverId(), /^obs-[0-9a-f]{32}$/);
+
   const obs = createObserver({ id: "obs-3", branchType: "number-branch" });
   const continuity = createContinuity(obs.id, obs.branchType);
+  const referentId = nextReferentId();
+  assert.match(referentId, /^ref-[0-9a-f]{32}$/);
 
   const referent = createReferent({
-    id: nextReferentId(continuity),
+    id: referentId,
     ownerObserverId: obs.id,
     type: "artifact",
     title: "sample",
@@ -121,8 +151,53 @@ test("admitted happen by RBC with deterministic IDs", () => {
   });
 
   const accepted = buildAccepted(continuity, create);
-  assert.ok(accepted.events[0].id.startsWith(`h-${obs.id}-`));
+  assert.match(create.id, /^h-[0-9a-f]{32}$/);
+  assert.equal(accepted.events[0].id, create.id);
   assert.equal(accepted.events[0].kind, "referent-created");
+});
+
+test("generated ids do not depend on continuity length or storage order", () => {
+  const continuity = createContinuity("id-owner", "number-branch");
+  const firstHappeningId = nextHappeningId(continuity);
+  const next = appendAdmittedHappening(
+    continuity,
+    createHappening({
+      actorObserverId: "id-owner",
+      kind: "number-delta",
+      payload: { delta: 1 },
+    })
+  );
+  const secondHappeningId = nextHappeningId(next);
+  const firstReferentId = nextReferentId(continuity);
+  const secondReferentId = nextReferentId(next);
+
+  assert.match(firstHappeningId, /^h-[0-9a-f]{32}$/);
+  assert.match(secondHappeningId, /^h-[0-9a-f]{32}$/);
+  assert.notEqual(firstHappeningId, secondHappeningId);
+  assert.match(firstReferentId, /^ref-[0-9a-f]{32}$/);
+  assert.match(secondReferentId, /^ref-[0-9a-f]{32}$/);
+  assert.notEqual(firstReferentId, secondReferentId);
+});
+
+test("appendEvent rejects duplicate event ids", () => {
+  const continuity = createContinuity("append-event-owner", "number-branch");
+  const first = appendEvent(continuity, {
+    id: "h-explicit-1",
+    actorObserverId: "append-event-owner",
+    kind: "number-delta",
+    payload: { delta: 1 },
+  });
+
+  assert.throws(
+    () =>
+      appendEvent(first, {
+        id: "h-explicit-1",
+        actorObserverId: "append-event-owner",
+        kind: "number-delta",
+        payload: { delta: 2 },
+      }),
+    /duplicate happening id h-explicit-1/
+  );
 });
 
 test("evaluateAdmittance rejects with no actor", () => {

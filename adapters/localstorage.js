@@ -1,3 +1,5 @@
+const { assertContinuity, cloneContinuityEnvelope, cloneJson } = require("../src/continuity");
+
 function createLocalStorageStore({ prefix = "poo-continuity-kernel" } = {}) {
   if (typeof window === "undefined" || !window.localStorage) {
     throw new Error("localStorage adapter requires browser context");
@@ -11,7 +13,9 @@ function createLocalStorageStore({ prefix = "poo-continuity-kernel" } = {}) {
     const normalized = {
       ownerObserverId: String(raw?.ownerObserverId || observerId),
       branchType: String(raw?.branchType || branchType || "default-continuity"),
-      events: Array.isArray(raw?.events) ? raw.events.filter((event) => event && typeof event === "object") : [],
+      events: Array.isArray(raw?.events)
+        ? raw.events.filter((event) => event && typeof event === "object").map((event) => cloneJson(event))
+        : [],
     };
 
     for (const event of normalized.events) {
@@ -20,6 +24,7 @@ function createLocalStorageStore({ prefix = "poo-continuity-kernel" } = {}) {
       }
     }
 
+    assertContinuity(normalized);
     return normalized;
   }
 
@@ -33,7 +38,7 @@ function createLocalStorageStore({ prefix = "poo-continuity-kernel" } = {}) {
 
     const parsed = JSON.parse(payload);
     const continuity = normalizeContinuity(parsed, observerId, branchType);
-    return continuity;
+    return cloneContinuityEnvelope(continuity);
   }
 
   async function loadContinuity(observerId, branchType = "default-continuity") {
@@ -45,10 +50,12 @@ function createLocalStorageStore({ prefix = "poo-continuity-kernel" } = {}) {
       throw new Error("continuity is required");
     }
 
-    const id = continuity.ownerObserverId;
-    const branchType = continuity.branchType || "default-continuity";
-    storage.setItem(key(id, branchType), JSON.stringify(continuity));
-    return continuity;
+    const normalized = cloneContinuityEnvelope(continuity);
+    assertContinuity(normalized);
+    const id = normalized.ownerObserverId;
+    const branchType = normalized.branchType || "default-continuity";
+    storage.setItem(key(id, branchType), JSON.stringify(normalized));
+    return cloneContinuityEnvelope(normalized);
   }
 
   async function removeContinuity(observerId, branchType = "default-continuity") {
@@ -67,7 +74,7 @@ function createLocalStorageStore({ prefix = "poo-continuity-kernel" } = {}) {
       const parsed = JSON.parse(payload);
       const continuity = normalizeContinuity(parsed, parsed?.ownerObserverId || "unknown", parsed?.branchType);
       if (branchType && continuity.branchType !== branchType) continue;
-      continuities.push(continuity);
+      continuities.push(cloneContinuityEnvelope(continuity));
     }
     return continuities;
   }
@@ -75,7 +82,7 @@ function createLocalStorageStore({ prefix = "poo-continuity-kernel" } = {}) {
   async function* streamContinuity(observerId, branchType = "default-continuity") {
     const continuity = getContinuity(observerId, branchType);
     for (const event of continuity?.events || []) {
-      yield event;
+      yield cloneJson(event);
     }
   }
 

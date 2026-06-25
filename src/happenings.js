@@ -18,7 +18,7 @@ function createHappening(input = {}) {
   const normalizedInput = {
     ...input,
   };
-  const happeningId = input.id || input.happeningId || null;
+  const happeningId = input.id || input.happeningId || nextHappeningId();
 
   return {
     ...normalizedInput,

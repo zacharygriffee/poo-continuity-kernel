@@ -1,6 +1,6 @@
 const fs = require("fs");
 const path = require("path");
-const { assertContinuity } = require("../src/continuity");
+const { assertContinuity, cloneContinuityEnvelope, cloneJson } = require("../src/continuity");
 
 function createFileStore({ rootDir = ".poo-continuity-store" } = {}) {
   const resolvedRoot = path.resolve(rootDir);
@@ -15,13 +15,20 @@ function createFileStore({ rootDir = ".poo-continuity-store" } = {}) {
     const continuity = {
       ownerObserverId: String(raw?.ownerObserverId || observerId),
       branchType: String(raw?.branchType || branchType || "default-continuity"),
-      events: Array.isArray(raw?.events) ? raw.events.filter((event) => event && typeof event === "object") : [],
+      events: Array.isArray(raw?.events)
+        ? raw.events.filter((event) => event && typeof event === "object").map((event) => cloneJson(event))
+        : [],
     };
+    assertContinuity(continuity);
     return continuity;
   }
 
+  function keyPart(value) {
+    return encodeURIComponent(String(value));
+  }
+
   function continuityKey(observerId, branchType = "default-continuity") {
-    return `${String(observerId)}::${String(branchType)}.json`;
+    return `${keyPart(observerId)}::${keyPart(branchType)}.json`;
   }
 
   function getContinuity(observerId, branchType = "default-continuity") {
@@ -41,8 +48,7 @@ function createFileStore({ rootDir = ".poo-continuity-store" } = {}) {
       return null;
     }
     const continuity = normalizeContinuity(parsed, observerId, branchType);
-    assertContinuity(continuity);
-    return continuity;
+    return cloneContinuityEnvelope(continuity);
   }
 
   async function loadContinuity(observerId, branchType = "default-continuity") {
@@ -60,7 +66,7 @@ function createFileStore({ rootDir = ".poo-continuity-store" } = {}) {
     const normalized = {
       ownerObserverId: String(continuity.ownerObserverId),
       branchType: String(continuity.branchType || "default-continuity"),
-      events: Array.isArray(continuity.events) ? continuity.events : [],
+      events: Array.isArray(continuity.events) ? continuity.events.map((event) => cloneJson(event)) : [],
     };
     assertContinuity(normalized);
 
@@ -69,7 +75,7 @@ function createFileStore({ rootDir = ".poo-continuity-store" } = {}) {
       JSON.stringify(normalized, null, 2),
       "utf8"
     );
-    return continuity;
+    return cloneContinuityEnvelope(normalized);
   }
 
   async function removeContinuity(observerId, branchType = "default-continuity") {
@@ -89,9 +95,8 @@ function createFileStore({ rootDir = ".poo-continuity-store" } = {}) {
       if (!fs.lstatSync(full).isFile()) continue;
       const parsed = JSON.parse(fs.readFileSync(full, "utf8"));
       const continuity = normalizeContinuity(parsed, parsed?.ownerObserverId || "unknown", parsed?.branchType);
-      assertContinuity(continuity);
       if (branchType && continuity.branchType !== branchType) continue;
-      continuities.push(continuity);
+      continuities.push(cloneContinuityEnvelope(continuity));
     }
     return continuities;
   }
@@ -99,7 +104,7 @@ function createFileStore({ rootDir = ".poo-continuity-store" } = {}) {
   async function* streamContinuity(observerId, branchType = "default-continuity") {
     const continuity = getContinuity(observerId, branchType);
     for (const event of continuity?.events || []) {
-      yield event;
+      yield cloneJson(event);
     }
   }
 

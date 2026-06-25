@@ -294,3 +294,108 @@ test("blend candidate is admitted locally without concatenating source histories
     "rejected"
   );
 });
+
+test("topology relation descriptors normalize and validate relation kinds", () => {
+  const bridge = poo.topology.createContinuityBridge({
+    bridgeId: "rel-bridge",
+    endpoints: [
+      { continuityId: "A", observerId: "a", surfaceRef: "closet" },
+      { continuityId: "B", observerId: "b", surfaceRef: "garage" },
+    ],
+  });
+  const bridgeRelation = poo.topology.createTopologyRelation({ relationKind: "bridge", referent: bridge });
+  assert.equal(bridgeRelation.kind, "topology-relation-descriptor");
+  assert.equal(bridgeRelation.relationKind, "bridge");
+  assert.equal(bridgeRelation.relationId, "rel-bridge");
+  assert.equal(poo.topology.validateTopologyRelation(bridgeRelation).decision, "admitted");
+
+  const mount = poo.topology.createContinuityMount({
+    mountId: "rel-mount",
+    parent: { continuityId: "town", observerId: "a", surfaceRef: "lot-7" },
+    child: { continuityId: "house", observerId: "b", surfaceRef: "boundary" },
+  });
+  assert.equal(poo.topology.validateTopologyRelation(poo.topology.createTopologyRelation({ relationKind: "mount", referent: mount })).valid, true);
+
+  const blend = poo.experimental.blends.createBlendCandidate({
+    blendId: "rel-blend",
+    inputContinuities: [
+      { continuityId: "A", ownerObserverId: "a", fromIndex: 0, toIndex: 1 },
+      { continuityId: "B", ownerObserverId: "b", fromIndex: 0, toIndex: 1 },
+    ],
+  });
+  assert.equal(poo.topology.validateTopologyRelation(poo.topology.createTopologyRelation({ relationKind: "blend-candidate", referent: blend })).valid, true);
+
+  const malformed = poo.topology.validateTopologyRelation(poo.topology.createTopologyRelation({ relationKind: "mount" }));
+  assert.equal(malformed.decision, "rejected");
+  assert.equal(malformed.nonClaims.includes("topology validation is not global truth"), true);
+});
+
+test("topology validators return stable result shape with RBC and segment detail", () => {
+  const sourceA = withEvent("shape-a");
+  const sourceB = withEvent("shape-b");
+  const bridge = poo.topology.createContinuityBridge({
+    bridgeId: "shape-bridge",
+    endpoints: [
+      { continuityId: "A", observerId: "shape-a", surfaceRef: "closet" },
+      { continuityId: "B", observerId: "shape-b", surfaceRef: "garage" },
+    ],
+  });
+  const result = poo.topology.validateBridgeCandidate({
+    bridge,
+    continuities: [sourceA, sourceB],
+    rbcDescriptors: [descriptor("shape-a-rbc", ["shape-b-rbc"]), descriptor("shape-b-rbc", ["shape-a-rbc"])],
+    segmentPolicies: [{ continuity: sourceA, policy: { mode: "happenings", maxHappenings: 1 } }],
+  });
+
+  assert.equal(result.valid, true);
+  assert.equal(result.decision, "admitted");
+  assert.equal(result.relationId, "shape-bridge");
+  assert.equal(result.relationKind, "bridge");
+  assert.ok(Array.isArray(result.conflicts));
+  assert.equal(result.rbcCompatibility.decision, "compatible");
+  assert.equal(result.segmentCompatibility.valid, true);
+  assert.equal(result.nonClaims.includes("topology validation is not global truth"), true);
+  assert.equal(result.nonClaims.includes("bounded compatibility is not full history proof"), true);
+});
+
+test("bridge mount and blend admission receipts include relation metadata and parent happening", () => {
+  const parent = withEvent("receipt-parent");
+  const child = withEvent("receipt-child");
+  const parentId = parent.events[0].id;
+  const childSnapshot = JSON.stringify(child);
+
+  const bridge = poo.topology.createContinuityBridge({
+    bridgeId: "receipt-bridge",
+    endpoints: [
+      { continuityId: "A", observerId: "receipt-parent", surfaceRef: "closet" },
+      { continuityId: "B", observerId: "receipt-child", surfaceRef: "garage" },
+    ],
+  });
+  const bridgeAdmission = poo.topology.admitContinuityBridge(parent, bridge, { parentHappeningId: parentId });
+  assert.equal(bridgeAdmission.receipt.relationId, "receipt-bridge");
+  assert.equal(bridgeAdmission.receipt.parentHappeningId, parentId);
+  assert.equal(bridgeAdmission.receipt.nonClaims.includes("topology admission is local continuity growth only"), true);
+
+  const mount = poo.topology.createContinuityMount({
+    mountId: "receipt-mount",
+    parent: { continuityId: "town", observerId: "receipt-parent", surfaceRef: "lot" },
+    child: { continuityId: "house", observerId: "receipt-child", surfaceRef: "boundary" },
+  });
+  const mountAdmission = poo.topology.admitContinuityMount(parent, mount, { parentHappeningId: parentId });
+  assert.equal(mountAdmission.receipt.relationId, "receipt-mount");
+  assert.equal(mountAdmission.receipt.parentHappeningId, parentId);
+
+  const blend = poo.experimental.blends.createBlendCandidate({
+    blendId: "receipt-blend",
+    inputContinuities: [
+      { continuityId: "A", ownerObserverId: "receipt-parent", fromIndex: 0, toIndex: 1 },
+      { continuityId: "B", ownerObserverId: "receipt-child", fromIndex: 0, toIndex: 1 },
+    ],
+  });
+  const local = createContinuity("receipt-local", "topology-test");
+  const blendAdmission = poo.experimental.blends.admitBlendCandidate(local, blend, { parentHappeningId: "h-parent-1" });
+  assert.equal(blendAdmission.receipt.relationId, "receipt-blend");
+  assert.equal(blendAdmission.receipt.parentHappeningId, "h-parent-1");
+  assert.equal(blendAdmission.continuity.events.length, 1);
+  assert.equal(JSON.stringify(child), childSnapshot);
+});

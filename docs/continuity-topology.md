@@ -42,3 +42,13 @@ A blend candidate is a referent that says multiple continuities may produce a ne
 The topology layer currently admits local happenings for `continuity-bridge-admitted`, `continuity-mount-admitted`, and `blend-candidate-admitted`.
 
 `segment-compatibility-admitted` is reserved for a future explicit segment-compatibility admission flow. Current segment compatibility helpers validate policy and return diagnostics; they do not append a segment event.
+
+## V2 relation descriptors and validation results
+
+`poo.topology.createTopologyRelation()` wraps bridge, mount, overlap, and blend-candidate referents in a normalized relation descriptor. This gives domain adapters one common shape for topology UI, logs, receipts, and pending-candidate views without replacing the existing bridge, mount, or blend APIs.
+
+Topology validators return a stable high-level shape with `decision`, `valid`, `reasons`, `nonClaims`, `conflicts`, `rbcCompatibility`, and `segmentCompatibility`. A compatible topology result still does not prove global truth; it only says the candidate passed the observer's bounded local validation surface.
+
+Bridge, mount, and blend admission receipts include relation metadata such as `relationId`, `relationKind`, and `parentHappeningId` when supplied. Admission remains local-only and appends exactly one local happening.
+
+See `examples/topology-relations.js` for domain-neutral examples covering a portal bridge, town/house mount conflict, repo/plugin path overlap, and video clip timeline overlap.

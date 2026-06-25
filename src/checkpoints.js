@@ -2,6 +2,7 @@ const { createHappening } = require("./happenings");
 const { appendAdmittedHappening } = require("./continuity");
 const { admittedReceipt, rejectedReceipt } = require("./receipts");
 const { EVENT_KIND_CHECKPOINT_ADMITTED } = require("./event-kinds");
+const { createRandomId } = require("./ids");
 
 function createCheckpoint(input = {}) {
   const ownerObserverId = String(input.ownerObserverId || input.sourceObserverId || "unknown").trim();
@@ -9,7 +10,7 @@ function createCheckpoint(input = {}) {
     throw new Error("ownerObserverId is required");
   }
 
-  const segmentId = String(input.segmentId || "").trim() || `seg-${Date.now()}`;
+  const segmentId = String(input.segmentId || "").trim() || createRandomId("seg");
   const startIndex = Number.isInteger(input.startIndex) ? input.startIndex : 0;
   const endIndex = Number.isInteger(input.endIndex) ? input.endIndex : startIndex;
   if (startIndex < 0 || endIndex < startIndex) {

@@ -1,5 +1,7 @@
+const { createObserverId } = require("./ids");
+
 function createObserver(input = {}) {
-  const id = String(input.id || input.observerId || "").trim();
+  const id = String(input.id || input.observerId || createObserverId()).trim();
   if (!id) {
     throw new Error("observer id is required");
   }
@@ -24,7 +26,8 @@ function assertObserver(value) {
 }
 
 function createReferent(input = {}) {
-  const id = String(input.id || "").trim();
+  const { nextReferentId } = require("./ids");
+  const id = String(input.id || nextReferentId()).trim();
   if (!id) {
     throw new Error("referent id is required");
   }

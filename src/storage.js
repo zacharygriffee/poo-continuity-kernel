@@ -3,6 +3,7 @@ const {
   appendAdmittedHappening,
   assertContinuity,
   cloneContinuityEnvelope,
+  cloneJson,
   normalizeContinuityBranchType,
 } = require("./continuity");
 
@@ -11,7 +12,7 @@ function normalizeContinuityEnvelope(value, ownerObserverId, branchType = "defau
     ownerObserverId: String(value?.ownerObserverId || ownerObserverId || "").trim(),
     branchType: normalizeContinuityBranchType(value, branchType),
     events: Array.isArray(value?.events)
-      ? value.events.filter((event) => event && typeof event === "object").map((event) => ({ ...event }))
+      ? value.events.filter((event) => event && typeof event === "object").map((event) => cloneJson(event))
       : [],
   };
   assertContinuity(normalized);
@@ -21,7 +22,7 @@ function normalizeContinuityEnvelope(value, ownerObserverId, branchType = "defau
 async function* eventsFromContinuity(continuity) {
   assertContinuity(continuity);
   for (const event of continuity.events) {
-    yield event;
+    yield cloneJson(event);
   }
 }
 
@@ -39,7 +40,7 @@ async function* toAsyncEventStream(events) {
   if (isAsyncIterable(events)) {
     for await (const event of events) {
       if (event && typeof event === "object") {
-        yield event;
+        yield cloneJson(event);
       }
     }
     return;
@@ -48,7 +49,7 @@ async function* toAsyncEventStream(events) {
   if (isIterable(events)) {
     for (const event of events) {
       if (event && typeof event === "object") {
-        yield event;
+        yield cloneJson(event);
       }
     }
     return;
@@ -66,7 +67,7 @@ async function continuityFromEventStream({
   const materialized = [];
 
   for await (const event of toAsyncEventStream(events)) {
-    materialized.push({ ...event });
+    materialized.push(cloneJson(event));
   }
 
   return {
@@ -196,7 +197,13 @@ function createAsyncContinuityStore({
         return [];
       }
       const listed = await listContinuities(options);
-      return Array.isArray(listed) ? listed : [];
+      return Array.isArray(listed)
+        ? listed.map((entry) =>
+            Array.isArray(entry?.events)
+              ? normalizeContinuityEnvelope(entry, entry?.ownerObserverId, entry?.branchType)
+              : cloneJson(entry)
+          )
+        : [];
     },
 
     streamContinuity(ownerObserverId, branchType = "default-continuity", options = {}) {

@@ -1,3 +1,5 @@
+const { assertContinuity, cloneContinuityEnvelope, cloneJson } = require("../src/continuity");
+
 function createMemoryStore() {
   const state = new Map();
 
@@ -9,7 +11,8 @@ function createMemoryStore() {
     if (typeof observerId !== "string" || !observerId.trim()) {
       throw new Error("observerId is required");
     }
-    return state.get(key(observerId, branchType)) || null;
+    const continuity = state.get(key(observerId, branchType)) || null;
+    return continuity ? cloneContinuityEnvelope(continuity) : null;
   }
 
   async function loadContinuity(observerId, branchType = "default-continuity") {
@@ -20,11 +23,13 @@ function createMemoryStore() {
     if (!continuity || !continuity.ownerObserverId) {
       throw new Error("continuity is required");
     }
+    assertContinuity(continuity);
+    const normalized = cloneContinuityEnvelope(continuity);
     state.set(key(continuity.ownerObserverId, continuity.branchType || "default-continuity"), {
-      ...continuity,
-      events: [...continuity.events],
+      ...normalized,
+      events: normalized.events,
     });
-    return continuity;
+    return cloneContinuityEnvelope(normalized);
   }
 
   async function removeContinuity(observerId, branchType = "default-continuity") {
@@ -35,10 +40,7 @@ function createMemoryStore() {
     const continuities = [];
     for (const continuity of state.values()) {
       if (branchType && continuity.branchType !== branchType) continue;
-      continuities.push({
-        ...continuity,
-        events: [...continuity.events],
-      });
+      continuities.push(cloneContinuityEnvelope(continuity));
     }
     return continuities;
   }
@@ -46,7 +48,7 @@ function createMemoryStore() {
   async function* streamContinuity(observerId, branchType = "default-continuity") {
     const continuity = getContinuity(observerId, branchType);
     for (const event of continuity?.events || []) {
-      yield event;
+      yield cloneJson(event);
     }
   }
 

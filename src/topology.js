@@ -3,19 +3,71 @@ const { appendAdmittedHappening } = require("./continuity");
 const { admittedReceipt, rejectedReceipt } = require("./receipts");
 const { validateRbcCompatibility } = require("./rbc-compatibility");
 const { validateSegmentCompatibility } = require("./segments");
+const { createRandomId } = require("./ids");
 const {
   EVENT_KIND_CONTINUITY_BRIDGE_ADMITTED,
   EVENT_KIND_CONTINUITY_MOUNT_ADMITTED,
 } = require("./event-kinds");
 
+const TOPOLOGY_NON_CLAIMS = Object.freeze([
+  "topology relation is observer-relative",
+  "topology validation is not global truth",
+  "topology admission is local continuity growth only",
+]);
+
 function uniqueId(prefix, input) {
-  return String(input || "").trim() || `${prefix}-${Date.now()}`;
+  return String(input || "").trim() || createRandomId(prefix);
 }
 
 function normalizeNonClaims(nonClaims) {
   return Array.from(new Set((Array.isArray(nonClaims) ? nonClaims : [])
     .map((entry) => (typeof entry === "string" ? entry.trim() : ""))
     .filter(Boolean)));
+}
+
+function normalizeReasons(reasons, fallback) {
+  const normalized = (Array.isArray(reasons) ? reasons : [])
+    .map((entry) => (typeof entry === "string" ? entry.trim() : ""))
+    .filter(Boolean);
+  return normalized.length > 0 ? normalized : [fallback];
+}
+
+function normalizeConflicts(conflicts, conflictReport) {
+  const entries = [];
+  if (Array.isArray(conflicts)) entries.push(...conflicts.filter(Boolean));
+  if (conflictReport) entries.push(conflictReport);
+  return entries;
+}
+
+function topologyResult(decision, input = {}) {
+  const normalizedDecision = String(decision || input.decision || "rejected").trim() || "rejected";
+  return {
+    valid: normalizedDecision === "admitted",
+    decision: normalizedDecision,
+    relationId: input.relationId || null,
+    relationKind: input.relationKind || null,
+    reasons: normalizeReasons(input.reasons, `${normalizedDecision} by topology validation`),
+    nonClaims: normalizeNonClaims([
+      ...TOPOLOGY_NON_CLAIMS,
+      ...(input.nonClaims || []),
+    ]),
+    conflicts: normalizeConflicts(input.conflicts, input.conflictReport),
+    conflictReport: input.conflictReport || null,
+    rbcCompatibility: input.rbcCompatibility || null,
+    segmentCompatibility: input.segmentCompatibility || null,
+  };
+}
+
+function admittedTopologyResult(input = {}) {
+  return topologyResult("admitted", input);
+}
+
+function rejectedTopologyResult(input = {}) {
+  return topologyResult("rejected", input);
+}
+
+function deferredTopologyResult(input = {}) {
+  return topologyResult("deferred", input);
 }
 
 function normalizeEndpoint(endpoint = {}) {
@@ -49,13 +101,16 @@ function normalizeSegmentPolicies(segmentPolicies) {
   return [];
 }
 
-function validateSegments(segmentPolicies, continuities) {
+function validateSegmentPoliciesForContinuities({ segmentPolicies, continuities } = {}) {
   const policies = normalizeSegmentPolicies(segmentPolicies);
+  const continuityList = normalizeContinuities(continuities);
   const reasons = [];
   const nonClaims = [];
+  const results = [];
+
   for (const entry of policies) {
     const policy = entry?.policy || entry;
-    const continuity = entry?.sourceContinuity || entry?.continuity || continuities.find((item) =>
+    const continuity = entry?.sourceContinuity || entry?.continuity || continuityList.find((item) =>
       !entry?.continuityId || item.continuityId === entry.continuityId || item.ownerObserverId === entry.continuityId
     );
     const validation = validateSegmentCompatibility({
@@ -68,13 +123,25 @@ function validateSegments(segmentPolicies, continuities) {
       expectedTailState: entry?.expectedTailState,
       initialState: entry?.initialState,
     });
+    results.push(validation);
     reasons.push(...(validation.reasons || []));
     nonClaims.push(...(validation.nonClaims || []));
     if (!validation.valid) {
-      return { valid: false, reasons, nonClaims: normalizeNonClaims(nonClaims) };
+      return {
+        valid: false,
+        reasons,
+        nonClaims: normalizeNonClaims(nonClaims),
+        results,
+      };
     }
   }
-  return { valid: true, reasons, nonClaims: normalizeNonClaims(nonClaims) };
+
+  return {
+    valid: true,
+    reasons,
+    nonClaims: normalizeNonClaims(nonClaims),
+    results,
+  };
 }
 
 function normalizeRuleDecision(decision, fallbackReason) {
@@ -84,7 +151,92 @@ function normalizeRuleDecision(decision, fallbackReason) {
     decision: normalized,
     reasons: Array.isArray(decision.reasons) && decision.reasons.length > 0 ? decision.reasons : [fallbackReason],
     conflictReport: decision.conflictReport || decision.report || null,
+    conflicts: Array.isArray(decision.conflicts) ? decision.conflicts : [],
   };
+}
+
+function relationIdFor(kind, referent) {
+  if (kind === "bridge") return referent?.bridgeId || null;
+  if (kind === "mount") return referent?.mountId || null;
+  if (kind === "blend-candidate") return referent?.blendId || null;
+  return referent?.relationId || null;
+}
+
+function createTopologyRelation(input = {}) {
+  const relationKind = String(input.relationKind || input.type || "").trim();
+  if (!["bridge", "mount", "overlap", "blend-candidate"].includes(relationKind)) {
+    return {
+      kind: "topology-relation-descriptor",
+      relationKind,
+      relationId: uniqueId("relation", input.relationId),
+      referent: input.referent || null,
+      relation: input.relation || null,
+      nonClaims: normalizeNonClaims([...TOPOLOGY_NON_CLAIMS, ...(input.nonClaims || [])]),
+    };
+  }
+
+  let referent = input.referent || null;
+  if (!referent && relationKind === "bridge") referent = createContinuityBridge(input.bridge || input);
+  if (!referent && relationKind === "mount") referent = createContinuityMount(input.mount || input);
+  if (!referent && relationKind === "overlap") referent = input.relation || input.overlap || null;
+  if (!referent && relationKind === "blend-candidate") referent = input.blendCandidate || input.blend || null;
+
+  return {
+    kind: "topology-relation-descriptor",
+    relationKind,
+    relationId: String(input.relationId || relationIdFor(relationKind, referent) || "").trim() || uniqueId("relation", null),
+    referent,
+    relation: input.relation || null,
+    validationScope: input.validationScope || referent?.validationScope || null,
+    nonClaims: normalizeNonClaims([
+      ...TOPOLOGY_NON_CLAIMS,
+      ...(referent?.nonClaims || []),
+      ...(input.nonClaims || []),
+    ]),
+  };
+}
+
+function validateTopologyRelation(relation) {
+  if (!relation || relation.kind !== "topology-relation-descriptor") {
+    return rejectedTopologyResult({
+      reasons: ["topology relation descriptor is required"],
+    });
+  }
+
+  if (!["bridge", "mount", "overlap", "blend-candidate"].includes(relation.relationKind)) {
+    return rejectedTopologyResult({
+      relationId: relation.relationId || null,
+      relationKind: relation.relationKind || null,
+      reasons: ["topology relation kind is invalid"],
+      nonClaims: relation.nonClaims,
+    });
+  }
+
+  if (relation.relationKind === "bridge" && (!relation.referent || relation.referent.kind !== "continuity-bridge-referent")) {
+    return rejectedTopologyResult({ relationId: relation.relationId, relationKind: relation.relationKind, reasons: ["bridge relation requires bridge referent"], nonClaims: relation.nonClaims });
+  }
+  if (relation.relationKind === "bridge" && (!Array.isArray(relation.referent.endpoints) || relation.referent.endpoints.length < 2 || !relation.referent.endpoints.every(endpointValid))) {
+    return rejectedTopologyResult({ relationId: relation.relationId, relationKind: relation.relationKind, reasons: ["bridge relation requires valid endpoints"], nonClaims: relation.nonClaims });
+  }
+  if (relation.relationKind === "mount" && (!relation.referent || relation.referent.kind !== "continuity-mount-referent")) {
+    return rejectedTopologyResult({ relationId: relation.relationId, relationKind: relation.relationKind, reasons: ["mount relation requires mount referent"], nonClaims: relation.nonClaims });
+  }
+  if (relation.relationKind === "mount" && (!endpointValid(relation.referent.parent) || !endpointValid(relation.referent.child))) {
+    return rejectedTopologyResult({ relationId: relation.relationId, relationKind: relation.relationKind, reasons: ["mount relation requires parent and child surfaces"], nonClaims: relation.nonClaims });
+  }
+  if (relation.relationKind === "blend-candidate" && (!relation.referent || relation.referent.kind !== "blend-candidate-referent")) {
+    return rejectedTopologyResult({ relationId: relation.relationId, relationKind: relation.relationKind, reasons: ["blend relation requires blend candidate referent"], nonClaims: relation.nonClaims });
+  }
+  if (relation.relationKind === "overlap" && !relation.referent && !relation.relation) {
+    return rejectedTopologyResult({ relationId: relation.relationId, relationKind: relation.relationKind, reasons: ["overlap relation requires relation payload"], nonClaims: relation.nonClaims });
+  }
+
+  return admittedTopologyResult({
+    relationId: relation.relationId,
+    relationKind: relation.relationKind,
+    reasons: ["topology relation descriptor is valid"],
+    nonClaims: relation.nonClaims,
+  });
 }
 
 function createContinuityBridge(input = {}) {
@@ -107,39 +259,39 @@ function createContinuityBridge(input = {}) {
 
 function validateBridgeCandidate({ bridge, continuities, rbcDescriptors, segmentPolicies, rulebook } = {}) {
   if (!bridge || bridge.kind !== "continuity-bridge-referent") {
-    return { valid: false, decision: "rejected", reasons: ["bridge kind is invalid"], nonClaims: [] };
+    return rejectedTopologyResult({ relationKind: "bridge", reasons: ["bridge kind is invalid"] });
   }
   if (!Array.isArray(bridge.endpoints) || bridge.endpoints.length < 2) {
-    return { valid: false, decision: "rejected", reasons: ["bridge requires at least two endpoints"], nonClaims: bridge.nonClaims };
+    return rejectedTopologyResult({ relationId: bridge.bridgeId, relationKind: "bridge", reasons: ["bridge requires at least two endpoints"], nonClaims: bridge.nonClaims });
   }
   if (!bridge.endpoints.every(endpointValid)) {
-    return { valid: false, decision: "rejected", reasons: ["bridge endpoints must identify continuity, observer, and surface"], nonClaims: bridge.nonClaims };
+    return rejectedTopologyResult({ relationId: bridge.bridgeId, relationKind: "bridge", reasons: ["bridge endpoints must identify continuity, observer, and surface"], nonClaims: bridge.nonClaims });
   }
 
-  const descriptors = normalizeDescriptors(rbcDescriptors);
   const rbc = validateRbcCompatibility({
-    descriptors,
+    descriptors: normalizeDescriptors(rbcDescriptors),
     policy: bridge.rbcCompatibility || {},
     requiredRuleKinds: bridge.rbcCompatibility?.requiredRuleKinds || [],
     operationKind: "continuity-bridge",
   });
   if (rbc.decision === "incompatible") {
-    return { valid: false, decision: "rejected", reasons: rbc.reasons, rbcCompatibility: rbc, nonClaims: normalizeNonClaims([...bridge.nonClaims, ...rbc.nonClaims]) };
+    return rejectedTopologyResult({ relationId: bridge.bridgeId, relationKind: "bridge", reasons: rbc.reasons, rbcCompatibility: rbc, nonClaims: [...bridge.nonClaims, ...rbc.nonClaims] });
   }
 
-  const segment = validateSegments(segmentPolicies, normalizeContinuities(continuities));
+  const segment = validateSegmentPoliciesForContinuities({ segmentPolicies, continuities });
   if (!segment.valid) {
-    return { valid: false, decision: "rejected", reasons: segment.reasons, rbcCompatibility: rbc, nonClaims: normalizeNonClaims([...bridge.nonClaims, ...rbc.nonClaims, ...segment.nonClaims]) };
+    return rejectedTopologyResult({ relationId: bridge.bridgeId, relationKind: "bridge", reasons: segment.reasons, rbcCompatibility: rbc, segmentCompatibility: segment, nonClaims: [...bridge.nonClaims, ...rbc.nonClaims, ...segment.nonClaims] });
   }
 
   if (typeof rulebook === "function") {
     const ruleDecision = normalizeRuleDecision(rulebook({ operationKind: "continuity-bridge", bridge, continuities }), "bridge rejected by rulebook");
     if (ruleDecision.decision !== "admitted") {
-      return { valid: false, decision: ruleDecision.decision, reasons: ruleDecision.reasons, conflictReport: ruleDecision.conflictReport, rbcCompatibility: rbc, nonClaims: normalizeNonClaims([...bridge.nonClaims, ...rbc.nonClaims, ...segment.nonClaims]) };
+      const result = ruleDecision.decision === "deferred" ? deferredTopologyResult : rejectedTopologyResult;
+      return result({ relationId: bridge.bridgeId, relationKind: "bridge", reasons: ruleDecision.reasons, conflictReport: ruleDecision.conflictReport, conflicts: ruleDecision.conflicts, rbcCompatibility: rbc, segmentCompatibility: segment, nonClaims: [...bridge.nonClaims, ...rbc.nonClaims, ...segment.nonClaims] });
     }
   }
 
-  return { valid: true, decision: "admitted", reasons: ["bridge candidate is compatible"], rbcCompatibility: rbc, nonClaims: normalizeNonClaims([...bridge.nonClaims, ...rbc.nonClaims, ...segment.nonClaims]) };
+  return admittedTopologyResult({ relationId: bridge.bridgeId, relationKind: "bridge", reasons: ["bridge candidate is compatible"], rbcCompatibility: rbc, segmentCompatibility: segment, nonClaims: [...bridge.nonClaims, ...rbc.nonClaims, ...segment.nonClaims] });
 }
 
 function admitContinuityBridge(localContinuity, bridge, payload = {}) {
@@ -149,21 +301,29 @@ function admitContinuityBridge(localContinuity, bridge, payload = {}) {
   if (!bridge || bridge.kind !== "continuity-bridge-referent") {
     return { continuity: localContinuity, receipt: rejectedReceipt({ observerId: localContinuity.ownerObserverId, reasons: ["bridge kind is invalid"] }) };
   }
+  const actorObserverId = payload.actorObserverId || localContinuity.ownerObserverId;
   const event = createHappening({
-    actorObserverId: payload.actorObserverId || localContinuity.ownerObserverId,
+    actorObserverId,
+    parentHappeningId: payload.parentHappeningId || null,
     kind: EVENT_KIND_CONTINUITY_BRIDGE_ADMITTED,
     payload: { bridge, ...payload },
   });
   event.bridgeId = bridge.bridgeId;
+  event.relationId = bridge.bridgeId;
+  event.relationKind = "bridge";
   event.bridge = bridge;
   return {
     continuity: appendAdmittedHappening(localContinuity, event),
     receipt: admittedReceipt({
       observerId: localContinuity.ownerObserverId,
-      actorObserverId: payload.actorObserverId || localContinuity.ownerObserverId,
+      actorObserverId,
       happeningId: event.id,
+      parentHappeningId: event.parentHappeningId,
+      relationId: bridge.bridgeId,
+      relationKind: "bridge",
+      bridgeId: bridge.bridgeId,
       reasons: ["continuity bridge admitted locally"],
-      nonClaims: bridge.nonClaims,
+      nonClaims: [...TOPOLOGY_NON_CLAIMS, ...bridge.nonClaims],
     }),
   };
 }
@@ -192,10 +352,10 @@ function createContinuityMount(input = {}) {
 
 function validateMountCandidate({ mount, parentContinuity, childContinuity, rbcDescriptors, segmentPolicies, rulebook } = {}) {
   if (!mount || mount.kind !== "continuity-mount-referent") {
-    return { valid: false, decision: "rejected", reasons: ["mount kind is invalid"], nonClaims: [] };
+    return rejectedTopologyResult({ relationKind: "mount", reasons: ["mount kind is invalid"] });
   }
   if (!endpointValid(mount.parent) || !endpointValid(mount.child)) {
-    return { valid: false, decision: "rejected", reasons: ["mount must identify parent and child surfaces"], nonClaims: mount.nonClaims };
+    return rejectedTopologyResult({ relationId: mount.mountId, relationKind: "mount", reasons: ["mount must identify parent and child surfaces"], nonClaims: mount.nonClaims });
   }
 
   const rbc = validateRbcCompatibility({
@@ -205,24 +365,24 @@ function validateMountCandidate({ mount, parentContinuity, childContinuity, rbcD
     operationKind: "continuity-mount",
   });
   if (rbc.decision === "incompatible") {
-    return { valid: false, decision: "rejected", reasons: rbc.reasons, rbcCompatibility: rbc, nonClaims: normalizeNonClaims([...mount.nonClaims, ...rbc.nonClaims]) };
+    return rejectedTopologyResult({ relationId: mount.mountId, relationKind: "mount", reasons: rbc.reasons, rbcCompatibility: rbc, nonClaims: [...mount.nonClaims, ...rbc.nonClaims] });
   }
 
-  const segment = validateSegments(segmentPolicies, [parentContinuity, childContinuity].filter(Boolean));
+  const segment = validateSegmentPoliciesForContinuities({ segmentPolicies, continuities: [parentContinuity, childContinuity].filter(Boolean) });
   if (!segment.valid) {
-    return { valid: false, decision: "rejected", reasons: segment.reasons, rbcCompatibility: rbc, nonClaims: normalizeNonClaims([...mount.nonClaims, ...rbc.nonClaims, ...segment.nonClaims]) };
+    return rejectedTopologyResult({ relationId: mount.mountId, relationKind: "mount", reasons: segment.reasons, rbcCompatibility: rbc, segmentCompatibility: segment, nonClaims: [...mount.nonClaims, ...rbc.nonClaims, ...segment.nonClaims] });
   }
 
   if (typeof rulebook === "function") {
     const ruleDecision = normalizeRuleDecision(rulebook({ operationKind: "continuity-mount", mount, parentContinuity, childContinuity }), "mount rejected by rulebook");
     if (ruleDecision.decision !== "admitted") {
       const policyMode = String(mount.conflictPolicy?.mode || "reject-on-conflict");
-      const decision = policyMode === "defer-on-conflict" && ruleDecision.decision !== "rejected" ? "deferred" : "rejected";
-      return { valid: false, decision, reasons: ruleDecision.reasons, conflictReport: ruleDecision.conflictReport, rbcCompatibility: rbc, nonClaims: normalizeNonClaims([...mount.nonClaims, ...rbc.nonClaims, ...segment.nonClaims]) };
+      const result = policyMode === "defer-on-conflict" && ruleDecision.decision !== "rejected" ? deferredTopologyResult : rejectedTopologyResult;
+      return result({ relationId: mount.mountId, relationKind: "mount", reasons: ruleDecision.reasons, conflictReport: ruleDecision.conflictReport, conflicts: ruleDecision.conflicts, rbcCompatibility: rbc, segmentCompatibility: segment, nonClaims: [...mount.nonClaims, ...rbc.nonClaims, ...segment.nonClaims] });
     }
   }
 
-  return { valid: true, decision: "admitted", reasons: ["mount candidate is compatible"], rbcCompatibility: rbc, nonClaims: normalizeNonClaims([...mount.nonClaims, ...rbc.nonClaims, ...segment.nonClaims]) };
+  return admittedTopologyResult({ relationId: mount.mountId, relationKind: "mount", reasons: ["mount candidate is compatible"], rbcCompatibility: rbc, segmentCompatibility: segment, nonClaims: [...mount.nonClaims, ...rbc.nonClaims, ...segment.nonClaims] });
 }
 
 function admitContinuityMount(parentContinuity, mount, payload = {}) {
@@ -232,21 +392,29 @@ function admitContinuityMount(parentContinuity, mount, payload = {}) {
   if (!mount || mount.kind !== "continuity-mount-referent") {
     return { continuity: parentContinuity, receipt: rejectedReceipt({ observerId: parentContinuity.ownerObserverId, reasons: ["mount kind is invalid"] }) };
   }
+  const actorObserverId = payload.actorObserverId || parentContinuity.ownerObserverId;
   const event = createHappening({
-    actorObserverId: payload.actorObserverId || parentContinuity.ownerObserverId,
+    actorObserverId,
+    parentHappeningId: payload.parentHappeningId || null,
     kind: EVENT_KIND_CONTINUITY_MOUNT_ADMITTED,
     payload: { mount, ...payload },
   });
   event.mountId = mount.mountId;
+  event.relationId = mount.mountId;
+  event.relationKind = "mount";
   event.mount = mount;
   return {
     continuity: appendAdmittedHappening(parentContinuity, event),
     receipt: admittedReceipt({
       observerId: parentContinuity.ownerObserverId,
-      actorObserverId: payload.actorObserverId || parentContinuity.ownerObserverId,
+      actorObserverId,
       happeningId: event.id,
+      parentHappeningId: event.parentHappeningId,
+      relationId: mount.mountId,
+      relationKind: "mount",
+      mountId: mount.mountId,
       reasons: ["continuity mount admitted locally"],
-      nonClaims: mount.nonClaims,
+      nonClaims: [...TOPOLOGY_NON_CLAIMS, ...mount.nonClaims],
     }),
   };
 }
@@ -284,6 +452,13 @@ function detectContinuityOverlap({ relation, continuities, rulebook } = {}) {
 }
 
 module.exports = {
+  TOPOLOGY_NON_CLAIMS,
+  createTopologyRelation,
+  validateTopologyRelation,
+  admittedTopologyResult,
+  rejectedTopologyResult,
+  deferredTopologyResult,
+  validateSegmentPoliciesForContinuities,
   createContinuityBridge,
   validateBridgeCandidate,
   admitContinuityBridge,
