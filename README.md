@@ -23,6 +23,16 @@ The kernel is intentionally explicit that:
 - admission is not canonical truth
 - projection is not write authority
 
+## Agent adoption guide
+
+Agents and downstream repos should start with [AGENTS.md](AGENTS.md) and the fuller [Agent Adoption Guide](docs/AGENT_GUIDE.md).
+
+Adoption rule:
+
+- If the repo has replayable continuity, use this kernel to make continuity explicit.
+- If the repo only has stateless helper functions, do not force the kernel into it.
+- Build domain semantics first; add storage only after replay, admission, rejection, and derivation tests pass.
+
 ## Package entry
 
 `src/index.js` exposes namespaced domain surfaces plus a small flat compatibility surface for common core helpers.
