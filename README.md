@@ -36,6 +36,9 @@ Adoption rule:
 ## Package entry
 
 `src/index.js` exposes namespaced domain surfaces plus a small flat compatibility surface for common core helpers.
+The package root is CommonJS and is intended to load in both Node and Bare. Runtime-specific
+storage adapters remain optional: `memory` is runtime-neutral, `fs` is Node-oriented, and
+`localStorage` requires a browser-like `window.localStorage`.
 
 Compatibility note:
 
@@ -85,6 +88,7 @@ Compatibility note:
 ```bash
 npm i
 npm test
+npm run test:bare
 ```
 
 ## Quick v2 seat-map flow

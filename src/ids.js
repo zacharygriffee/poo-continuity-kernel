@@ -1,14 +1,10 @@
-const crypto = require("crypto");
+const { digestHex, randomBytes } = require("./runtime-crypto");
 
 const DEFAULT_RANDOM_BYTES = 32;
 const DEFAULT_DIGEST_LENGTH = 32;
 
 function randomDigest({ bytes = DEFAULT_RANDOM_BYTES, algorithm = "sha256", length = DEFAULT_DIGEST_LENGTH } = {}) {
-  return crypto
-    .createHash(algorithm)
-    .update(crypto.randomBytes(bytes))
-    .digest("hex")
-    .slice(0, length);
+  return digestHex(algorithm, randomBytes(bytes)).slice(0, length);
 }
 
 function createRandomId(prefix, options = {}) {
