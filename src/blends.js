@@ -1,6 +1,6 @@
 const { createHappening } = require("./happenings");
 const { appendAdmittedHappening } = require("./continuity");
-const { admittedReceipt, rejectedReceipt } = require("./receipts");
+const { admittedReceipt, rejectedReceipt, deferredReceipt } = require("./receipts");
 const { validateRbcCompatibility } = require("./rbc-compatibility");
 const topology = require("./topology");
 const { EVENT_KIND_BLEND_CANDIDATE_ADMITTED } = require("./event-kinds");
@@ -123,8 +123,50 @@ function admitBlendCandidate(localContinuity, blendCandidate, payload = {}) {
   };
 }
 
+function receiptForBlendValidation(localContinuity, validation) {
+  const observerId = localContinuity?.ownerObserverId || "unknown";
+  const base = {
+    observerId,
+    actorObserverId: observerId,
+    relationId: validation?.relationId || null,
+    relationKind: validation?.relationKind || "blend-candidate",
+    blendId: validation?.relationId || null,
+    reasons: validation?.reasons || ["blend validation failed"],
+    nonClaims: validation?.nonClaims || topology.TOPOLOGY_NON_CLAIMS,
+    conflicts: validation?.conflicts || [],
+    conflictReport: validation?.conflictReport || null,
+    rbcCompatibility: validation?.rbcCompatibility || null,
+    segmentCompatibility: validation?.segmentCompatibility || null,
+  };
+  return validation?.decision === "deferred" ? deferredReceipt(base) : rejectedReceipt(base);
+}
+
+function validateAndAdmitBlendCandidate({
+  localContinuity,
+  blendCandidate,
+  continuities,
+  rbcDescriptors,
+  segmentPolicies,
+  rulebook,
+  payload = {},
+} = {}) {
+  const validation = validateBlendCandidate({ blendCandidate, continuities, rbcDescriptors, segmentPolicies, rulebook });
+  if (validation.decision !== "admitted") {
+    return {
+      continuity: localContinuity,
+      validation,
+      receipt: receiptForBlendValidation(localContinuity, validation),
+    };
+  }
+  return {
+    ...admitBlendCandidate(localContinuity, blendCandidate, payload),
+    validation,
+  };
+}
+
 module.exports = {
   createBlendCandidate,
   validateBlendCandidate,
   admitBlendCandidate,
+  validateAndAdmitBlendCandidate,
 };

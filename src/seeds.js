@@ -195,6 +195,7 @@ function validateTailFromSeed(observerContinuity, sourceContinuity, seed, option
 
 module.exports = {
   computeDemoSliceFingerprint,
+  computeContinuitySliceDemoFingerprint: computeDemoSliceFingerprint,
   computeContinuitySliceHash: computeDemoSliceFingerprint,
   createContinuitySeed,
   admitContinuitySeed,

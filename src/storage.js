@@ -5,6 +5,7 @@ const {
   cloneContinuityEnvelope,
   cloneJson,
   normalizeContinuityBranchType,
+  normalizeReplayValidationMode,
 } = require("./continuity");
 
 function normalizeContinuityEnvelope(value, ownerObserverId, branchType = "default-continuity") {
@@ -104,10 +105,12 @@ async function validateReplayFromStream({
   rulebook,
   initialState = {},
   continuity = null,
+  validationMode = "strict",
 }) {
   if (typeof reducer !== "function") {
     throw new Error("reducer must be a function");
   }
+  const normalizedValidationMode = normalizeReplayValidationMode(validationMode);
 
   const rulefn =
     typeof rulebook === "function"
@@ -123,6 +126,7 @@ async function validateReplayFromStream({
     valid: true,
     state: initialState,
     failures: [],
+    validationMode: normalizedValidationMode,
   };
 
   for await (const event of toAsyncEventStream(events)) {
@@ -140,8 +144,10 @@ async function validateReplayFromStream({
           ? decision.reasons
           : ["rulebook rejected event"],
       });
-      eventIndex += 1;
-      continue;
+      if (normalizedValidationMode === "strict") {
+        eventIndex += 1;
+        continue;
+      }
     }
 
     state = reducer(state, event, {
@@ -162,6 +168,7 @@ function createAsyncContinuityStore({
   listContinuities,
   streamContinuity,
   appendHappening,
+  appendAdmittedHappening: appendAdmittedHappeningAdapter,
 }) {
   if (typeof loadContinuity !== "function") {
     throw new Error("loadContinuity function is required");
@@ -218,9 +225,12 @@ function createAsyncContinuityStore({
       })();
     },
 
-    async appendHappening(ownerObserverId, branchType = "default-continuity", happening) {
-      if (typeof appendHappening === "function") {
-        const appended = await appendHappening(ownerObserverId, branchType, happening);
+    async appendAdmittedHappening(ownerObserverId, branchType = "default-continuity", happening) {
+      const adapterAppend = typeof appendAdmittedHappeningAdapter === "function"
+        ? appendAdmittedHappeningAdapter
+        : appendHappening;
+      if (typeof adapterAppend === "function") {
+        const appended = await adapterAppend(ownerObserverId, branchType, happening);
         return appended ? normalizeContinuityEnvelope(appended, ownerObserverId, branchType) : appended;
       }
 
@@ -230,6 +240,10 @@ function createAsyncContinuityStore({
       const next = appendAdmittedHappening(current, happening);
       await this.saveContinuity(next);
       return next;
+    },
+
+    async appendHappening(ownerObserverId, branchType = "default-continuity", happening) {
+      return this.appendAdmittedHappening(ownerObserverId, branchType, happening);
     },
   };
 }

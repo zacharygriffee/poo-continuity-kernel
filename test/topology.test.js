@@ -138,6 +138,16 @@ test("bridge candidate validates endpoints, RBC, rulebook, and admits locally wi
   assert.equal(admitted.continuity.events.at(-1).kind, "continuity-bridge-admitted");
   assert.equal(JSON.stringify(continuityB), snapshotB);
 
+  const validatedAdmit = poo.topology.validateAndAdmitContinuityBridge({
+    localContinuity: continuityA,
+    bridge,
+    continuities: [continuityA, continuityB],
+    rbcDescriptors: [descriptor("bridge-a-rbc", ["bridge-b-rbc"]), descriptor("bridge-b-rbc", ["bridge-a-rbc"])],
+  });
+  assert.equal(validatedAdmit.validation.decision, "admitted");
+  assert.equal(validatedAdmit.receipt.decision, "admitted");
+  assert.equal(validatedAdmit.continuity.events.length, continuityA.events.length + 1);
+
   const oneEndpoint = poo.topology.createContinuityBridge({
     endpoints: [{ continuityId: "only", observerId: "bridge-a", surfaceRef: "surface" }],
   });
@@ -156,6 +166,16 @@ test("bridge candidate validates endpoints, RBC, rulebook, and admits locally wi
   });
   assert.equal(ruleRejected.decision, "rejected");
   assert.equal(ruleRejected.reasons[0], "endpoint already claimed");
+
+  const rejectedAdmission = poo.topology.validateAndAdmitContinuityBridge({
+    localContinuity: continuityA,
+    bridge,
+    rbcDescriptors: [descriptor("bridge-a-rbc", ["bridge-b-rbc"]), descriptor("bridge-b-rbc", ["bridge-a-rbc"])],
+    rulebook: () => ({ decision: "rejected", reasons: ["endpoint already claimed"] }),
+  });
+  assert.equal(rejectedAdmission.validation.decision, "rejected");
+  assert.equal(rejectedAdmission.receipt.decision, "rejected");
+  assert.equal(rejectedAdmission.continuity.events.length, continuityA.events.length);
 });
 
 test("mount validates parent child surfaces and delegates conflicts", () => {
@@ -219,6 +239,27 @@ test("mount validates parent child surfaces and delegates conflicts", () => {
   assert.equal(admitted.continuity.events.at(-1).kind, "continuity-mount-admitted");
   assert.equal(admitted.continuity.events.length, parent.events.length + 1);
   assert.equal(JSON.stringify(child), childSnapshot);
+
+  const validatedMount = poo.topology.validateAndAdmitContinuityMount({
+    parentContinuity: parent,
+    childContinuity: child,
+    mount,
+    rbcDescriptors,
+  });
+  assert.equal(validatedMount.validation.decision, "admitted");
+  assert.equal(validatedMount.receipt.decision, "admitted");
+  assert.equal(validatedMount.continuity.events.length, parent.events.length + 1);
+
+  const deferredAdmission = poo.topology.validateAndAdmitContinuityMount({
+    parentContinuity: parent,
+    childContinuity: child,
+    mount: deferredMount,
+    rbcDescriptors,
+    rulebook: () => ({ decision: "deferred", reasons: ["requires arborist review"], conflictReport }),
+  });
+  assert.equal(deferredAdmission.validation.decision, "deferred");
+  assert.equal(deferredAdmission.receipt.decision, "deferred");
+  assert.equal(deferredAdmission.continuity.events.length, parent.events.length);
 });
 
 test("overlap reports are normalized and non-mutating", () => {
@@ -277,6 +318,16 @@ test("blend candidate is admitted locally without concatenating source histories
   assert.equal(JSON.stringify(sourceA), snapshotA);
   assert.equal(JSON.stringify(sourceB), snapshotB);
 
+  const validatedBlend = poo.experimental.blends.validateAndAdmitBlendCandidate({
+    localContinuity: local,
+    blendCandidate: blend,
+    continuities: [sourceA, sourceB],
+    rbcDescriptors,
+  });
+  assert.equal(validatedBlend.validation.decision, "admitted");
+  assert.equal(validatedBlend.receipt.decision, "admitted");
+  assert.equal(validatedBlend.continuity.events.length, 1);
+
   const conflicted = poo.experimental.blends.validateBlendCandidate({
     blendCandidate: poo.experimental.blends.createBlendCandidate({
       inputContinuities: blend.inputContinuities,
@@ -285,6 +336,18 @@ test("blend candidate is admitted locally without concatenating source histories
     rbcDescriptors,
   });
   assert.equal(conflicted.decision, "deferred");
+
+  const deferredBlend = poo.experimental.blends.validateAndAdmitBlendCandidate({
+    localContinuity: local,
+    blendCandidate: poo.experimental.blends.createBlendCandidate({
+      inputContinuities: blend.inputContinuities,
+      conflicts: [poo.topology.createContinuityConflictReport({ conflictSurface: "timeline:5-10" })],
+    }),
+    rbcDescriptors,
+  });
+  assert.equal(deferredBlend.validation.decision, "deferred");
+  assert.equal(deferredBlend.receipt.decision, "deferred");
+  assert.equal(deferredBlend.continuity.events.length, local.events.length);
 
   assert.equal(
     poo.experimental.blends.validateBlendCandidate({

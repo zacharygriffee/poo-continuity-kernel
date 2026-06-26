@@ -172,7 +172,7 @@ test("localStorage store load list and stream results are mutation-isolated", as
   }
 });
 
-test("async store wrapper appends by loading and saving envelope", async () => {
+test("async store wrapper appends admitted happenings by loading and saving envelope", async () => {
   const backing = createMemoryStore();
   const store = createAsyncContinuityStore({
     loadContinuity: backing.loadContinuity,
@@ -185,11 +185,53 @@ test("async store wrapper appends by loading and saving envelope", async () => {
     payload: { delta: 2 },
   });
 
-  const next = await store.appendHappening("append-observer", "number-branch", event);
+  const next = await store.appendAdmittedHappening("append-observer", "number-branch", event);
   const loaded = await store.loadContinuity("append-observer", "number-branch");
+  const aliasNext = await store.appendHappening(
+    "append-observer",
+    "alias-branch",
+    createHappening({
+      actorObserverId: "append-observer",
+      kind: "number-delta",
+      payload: { delta: 3 },
+    })
+  );
 
   assert.equal(next.events.length, 1);
   assert.equal(loaded.events[0].kind, "number-delta");
+  assert.equal(aliasNext.events.length, 1);
+});
+
+test("async store wrapper prefers adapter appendAdmittedHappening over legacy appendHappening", async () => {
+  const backing = createMemoryStore();
+  let legacyCalled = false;
+  let admittedCalled = false;
+  const store = createAsyncContinuityStore({
+    loadContinuity: backing.loadContinuity,
+    saveContinuity: backing.saveContinuity,
+    appendHappening() {
+      legacyCalled = true;
+      throw new Error("legacy append should not be called");
+    },
+    async appendAdmittedHappening(ownerObserverId, branchType, happening) {
+      admittedCalled = true;
+      return backing.appendAdmittedHappening(ownerObserverId, branchType, happening);
+    },
+  });
+
+  const next = await store.appendAdmittedHappening(
+    "preferred-observer",
+    "number-branch",
+    createHappening({
+      actorObserverId: "preferred-observer",
+      kind: "number-delta",
+      payload: { delta: 1 },
+    })
+  );
+
+  assert.equal(admittedCalled, true);
+  assert.equal(legacyCalled, false);
+  assert.equal(next.events.length, 1);
 });
 
 test("async store wrapper returns normalized clone-isolated envelopes", async () => {
@@ -305,4 +347,44 @@ test("continuity can be materialized from async event stream", async () => {
   assert.equal(continuity.events.length, 2);
   assert.equal(replay.valid, true);
   assert.equal(replay.state.value, 5);
+});
+
+test("stream replay supports strict and audit validation modes", async () => {
+  const events = [
+    createHappening({
+      actorObserverId: "stream-mode",
+      kind: "number-delta",
+      payload: { delta: 1 },
+    }),
+    createHappening({
+      actorObserverId: "stream-mode",
+      kind: "number-delta",
+      payload: { delta: 10 },
+    }),
+  ];
+  const rulebook = (event) =>
+    Number(event.payload?.delta || 0) > 5
+      ? { decision: "rejected", reasons: ["delta too large"] }
+      : { decision: "admitted" };
+
+  const strict = await validateReplayFromStream({
+    events,
+    reducer: numberReducer,
+    rulebook,
+    initialState: { value: 0 },
+  });
+  const audit = await validateReplayFromStream({
+    events,
+    reducer: numberReducer,
+    rulebook,
+    initialState: { value: 0 },
+    validationMode: "audit",
+  });
+
+  assert.equal(strict.valid, false);
+  assert.equal(strict.validationMode, "strict");
+  assert.equal(strict.state.value, 1);
+  assert.equal(audit.valid, false);
+  assert.equal(audit.validationMode, "audit");
+  assert.equal(audit.state.value, 11);
 });

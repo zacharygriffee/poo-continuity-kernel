@@ -772,8 +772,8 @@ function validateSeatMapHappening(continuity, happening, options = {}) {
   }
 
   return {
-    decision: "admitted",
-    reasons: ["event kind not seat-mapped and admitted by default"],
+    decision: "deferred",
+    reasons: ["event kind is not handled by seat-map rulebook"],
   };
 }
 

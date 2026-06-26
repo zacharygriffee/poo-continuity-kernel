@@ -209,6 +209,16 @@ function evaluateAdmittance({
         reasons: ruleDecision.reasons,
       });
     }
+
+    return admittedReceipt({
+      observerId: continuity.ownerObserverId,
+      actorObserverId,
+      happeningId,
+      parentHappeningId,
+      seatReferentId,
+      normalizedHappening: normalized,
+      reasons: ruleDecision.reasons,
+    });
   }
 
   if (normalizedDefault === "deferred") {
@@ -266,11 +276,17 @@ function cloneContinuityEnvelope(continuity) {
   };
 }
 
-function validateReplay(continuity, reducer, rulebook, initialState = {}) {
+function normalizeReplayValidationMode(mode) {
+  const normalized = String(mode || "strict").trim();
+  return normalized === "audit" ? "audit" : "strict";
+}
+
+function validateReplay(continuity, reducer, rulebook, initialState = {}, options = {}) {
   assertContinuity(continuity);
   if (typeof reducer !== "function") {
     throw new Error("reducer must be a function");
   }
+  const validationMode = normalizeReplayValidationMode(options.validationMode);
   const rulefn =
     typeof rulebook === "function"
       ? rulebook
@@ -284,6 +300,7 @@ function validateReplay(continuity, reducer, rulebook, initialState = {}) {
     valid: true,
     state: initialState,
     failures: [],
+    validationMode,
   };
 
   for (let i = 0; i < continuity.events.length; i += 1) {
@@ -302,7 +319,9 @@ function validateReplay(continuity, reducer, rulebook, initialState = {}) {
           ? decision.reasons
           : ["rulebook rejected event"],
       });
-      continue;
+      if (validationMode === "strict") {
+        continue;
+      }
     }
 
     state = reducer(state, event, {
@@ -330,6 +349,7 @@ module.exports = {
   normalizeContinuityBranchType,
   cloneContinuityEnvelope,
   cloneJson,
+  normalizeReplayValidationMode,
   nextHappeningId,
   createReferentId,
 };

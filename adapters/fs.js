@@ -108,12 +108,16 @@ function createFileStore({ rootDir = ".poo-continuity-store" } = {}) {
     }
   }
 
-  async function appendHappening(observerId, branchType = "default-continuity", happening) {
+  async function appendAdmittedHappeningToStore(observerId, branchType = "default-continuity", happening) {
     const { createContinuity, appendAdmittedHappening } = require("../src/continuity");
     const current = getContinuity(observerId, branchType) || createContinuity(observerId, branchType);
     const next = appendAdmittedHappening(current, happening);
     saveContinuity(next);
     return next;
+  }
+
+  async function appendHappening(observerId, branchType = "default-continuity", happening) {
+    return appendAdmittedHappeningToStore(observerId, branchType, happening);
   }
 
   function clear() {
@@ -136,6 +140,7 @@ function createFileStore({ rootDir = ".poo-continuity-store" } = {}) {
     removeContinuity,
     listContinuities,
     streamContinuity,
+    appendAdmittedHappening: appendAdmittedHappeningToStore,
     appendHappening,
     clear,
   };

@@ -224,6 +224,26 @@ test("seat-position-changed in RBC with out-of-bounds is rejected", () => {
   assert.equal(decision.decision, "rejected");
 });
 
+test("seat-map rulebook defers unknown event kinds by default", () => {
+  const owner = createObserver({ id: "unknown-seat-owner", branchType: BRANCH_TYPE });
+  const continuity = originBootContinuity(owner);
+  const rulebook = createSeatMapRulebook();
+  const decision = evaluateAdmittance({
+    continuity,
+    happening: createHappening({
+      actorObserverId: owner.id,
+      kind: "domain-specific-unknown",
+      payload: { value: true },
+    }),
+    state: deriveSeatMapState(continuity),
+    rulebook,
+    defaultDecision: "deferred",
+  });
+
+  assert.equal(decision.decision, "deferred");
+  assert.equal(decision.reasons[0], "event kind is not handled by seat-map rulebook");
+});
+
 test("v2 derive ignores legacy seat verbs", () => {
   const owner = createObserver({ id: "legacy-owner", branchType: BRANCH_TYPE });
   let continuity = createContinuity(owner.id, owner.branchType);

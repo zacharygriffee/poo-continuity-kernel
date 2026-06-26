@@ -99,6 +99,21 @@ test("seed validates source continuity tail", () => {
   assert.equal(seed.nonClaims.includes("seed fingerprint is not cryptographic integrity"), true);
 });
 
+test("seed slice fingerprint export names demo fingerprint posture", () => {
+  const events = [
+    createHappening({ actorObserverId: "fingerprint-source", kind: "number-delta", payload: { delta: 1 } }),
+  ];
+
+  assert.equal(
+    poo.seeds.computeContinuitySliceDemoFingerprint(events),
+    poo.seeds.computeDemoSliceFingerprint(events)
+  );
+  assert.equal(
+    poo.seeds.computeContinuitySliceHash(events),
+    poo.seeds.computeContinuitySliceDemoFingerprint(events)
+  );
+});
+
 test("join point can be admitted without history merge", () => {
   const owner = createObserver({ id: "join-owner", branchType: "number-branch" });
   let ownerContinuity = createContinuity(owner.id, owner.branchType);

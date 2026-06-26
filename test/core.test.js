@@ -14,6 +14,7 @@ const {
   nextReferentId,
   createObserverId,
   nextHappeningId,
+  validateReplay,
 } = poo.core;
 
 const {
@@ -127,6 +128,26 @@ test("evaluateAdmittance can default to deferred", () => {
   assert.equal(decision.decision, "deferred");
 });
 
+test("evaluateAdmittance rulebook admission overrides deferred default fallback", () => {
+  const obs = createObserver({ id: "obs-rulebook-admitted", branchType: "number-branch" });
+  const continuity = createContinuity(obs.id, obs.branchType);
+  const receipt = evaluateAdmittance({
+    continuity,
+    happening: {
+      actorObserverId: obs.id,
+      kind: "number-delta",
+      payload: { delta: 1 },
+    },
+    state: { value: 0 },
+    rulebook: () => ({ decision: "admitted", reasons: ["explicitly admitted by rulebook"] }),
+    defaultDecision: "deferred",
+  });
+
+  assert.equal(receipt.decision, "admitted");
+  assert.deepEqual(receipt.reasons, ["explicitly admitted by rulebook"]);
+  assert.equal(receipt.normalizedHappening.id, receipt.happeningId);
+});
+
 test("generated ids are crypto-shaped and admission preserves proposed happening id", () => {
   const generatedObserver = createObserver({ branchType: "number-branch" });
   assert.match(generatedObserver.id, /^obs-[0-9a-f]{32}$/);
@@ -198,6 +219,41 @@ test("appendEvent rejects duplicate event ids", () => {
       }),
     /duplicate happening id h-explicit-1/
   );
+});
+
+test("validateReplay supports strict and audit validation modes", () => {
+  const continuity = createContinuity("replay-mode-owner", "number-branch");
+  const accepted = appendAdmittedHappening(
+    continuity,
+    createHappening({
+      actorObserverId: "replay-mode-owner",
+      kind: "number-delta",
+      payload: { delta: 1 },
+    })
+  );
+  const withRejected = appendAdmittedHappening(
+    accepted,
+    createHappening({
+      actorObserverId: "replay-mode-owner",
+      kind: "number-delta",
+      payload: { delta: 10 },
+    })
+  );
+  const rulebook = (event) =>
+    Number(event.payload?.delta || 0) > 5
+      ? { decision: "rejected", reasons: ["delta too large"] }
+      : { decision: "admitted" };
+
+  const strict = validateReplay(withRejected, numberReducer, rulebook, { value: 0 });
+  const audit = validateReplay(withRejected, numberReducer, rulebook, { value: 0 }, { validationMode: "audit" });
+
+  assert.equal(strict.valid, false);
+  assert.equal(strict.validationMode, "strict");
+  assert.equal(strict.state.value, 1);
+  assert.equal(audit.valid, false);
+  assert.equal(audit.validationMode, "audit");
+  assert.equal(audit.state.value, 11);
+  assert.equal(audit.failures[0].reasons[0], "delta too large");
 });
 
 test("evaluateAdmittance rejects with no actor", () => {

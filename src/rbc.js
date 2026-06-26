@@ -13,8 +13,6 @@ function createRbcReferent(input = {}) {
     title: input.title || `RBC ${id}`,
     appliesToBranchType: input.appliesToBranchType || "default-continuity",
     rule: {
-      type,
-      value,
       ...(input.rule || {}),
       type,
       value,

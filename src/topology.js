@@ -1,6 +1,6 @@
 const { createHappening } = require("./happenings");
 const { appendAdmittedHappening } = require("./continuity");
-const { admittedReceipt, rejectedReceipt } = require("./receipts");
+const { admittedReceipt, rejectedReceipt, deferredReceipt } = require("./receipts");
 const { validateRbcCompatibility } = require("./rbc-compatibility");
 const { validateSegmentCompatibility } = require("./segments");
 const { createRandomId } = require("./ids");
@@ -328,6 +328,46 @@ function admitContinuityBridge(localContinuity, bridge, payload = {}) {
   };
 }
 
+function receiptForTopologyValidation(localContinuity, validation, fallbackObserverId = "unknown") {
+  const observerId = localContinuity?.ownerObserverId || fallbackObserverId;
+  const base = {
+    observerId,
+    actorObserverId: observerId,
+    relationId: validation?.relationId || null,
+    relationKind: validation?.relationKind || null,
+    reasons: validation?.reasons || ["topology validation failed"],
+    nonClaims: validation?.nonClaims || TOPOLOGY_NON_CLAIMS,
+    conflicts: validation?.conflicts || [],
+    conflictReport: validation?.conflictReport || null,
+    rbcCompatibility: validation?.rbcCompatibility || null,
+    segmentCompatibility: validation?.segmentCompatibility || null,
+  };
+  return validation?.decision === "deferred" ? deferredReceipt(base) : rejectedReceipt(base);
+}
+
+function validateAndAdmitContinuityBridge({
+  localContinuity,
+  bridge,
+  continuities,
+  rbcDescriptors,
+  segmentPolicies,
+  rulebook,
+  payload = {},
+} = {}) {
+  const validation = validateBridgeCandidate({ bridge, continuities, rbcDescriptors, segmentPolicies, rulebook });
+  if (validation.decision !== "admitted") {
+    return {
+      continuity: localContinuity,
+      validation,
+      receipt: receiptForTopologyValidation(localContinuity, validation),
+    };
+  }
+  return {
+    ...admitContinuityBridge(localContinuity, bridge, payload),
+    validation,
+  };
+}
+
 function createContinuityMount(input = {}) {
   return {
     kind: "continuity-mount-referent",
@@ -419,6 +459,29 @@ function admitContinuityMount(parentContinuity, mount, payload = {}) {
   };
 }
 
+function validateAndAdmitContinuityMount({
+  parentContinuity,
+  childContinuity,
+  mount,
+  rbcDescriptors,
+  segmentPolicies,
+  rulebook,
+  payload = {},
+} = {}) {
+  const validation = validateMountCandidate({ mount, parentContinuity, childContinuity, rbcDescriptors, segmentPolicies, rulebook });
+  if (validation.decision !== "admitted") {
+    return {
+      continuity: parentContinuity,
+      validation,
+      receipt: receiptForTopologyValidation(parentContinuity, validation),
+    };
+  }
+  return {
+    ...admitContinuityMount(parentContinuity, mount, payload),
+    validation,
+  };
+}
+
 function createContinuityConflictReport(input = {}) {
   return {
     kind: "continuity-conflict-report",
@@ -462,9 +525,11 @@ module.exports = {
   createContinuityBridge,
   validateBridgeCandidate,
   admitContinuityBridge,
+  validateAndAdmitContinuityBridge,
   createContinuityMount,
   validateMountCandidate,
   admitContinuityMount,
+  validateAndAdmitContinuityMount,
   createContinuityConflictReport,
   detectContinuityOverlap,
 };
