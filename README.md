@@ -33,6 +33,21 @@ Adoption rule:
 - If the repo only has stateless helper functions, do not force the kernel into it.
 - Build domain semantics first; add storage only after replay, admission, rejection, and derivation tests pass.
 
+## Kernel guardrails
+
+Keep this repo boring. Every primitive added here becomes conceptual gravity for downstream
+repos, so new kernel primitives should be accepted only when they are:
+
+- domain-agnostic
+- expressible through admitted, rejected, or deferred behavior
+- covered by replay determinism tests
+- explicit that they do not imply global truth
+- separate from renderer, cockpit, storage, or transport authority
+
+Pressure cases from downstream repos should start as domain adapter feedback. The kernel should
+accept only the minimum generalized primitive needed to preserve replay, admission, and boundary
+clarity.
+
 ## Package entry
 
 `src/index.js` exposes namespaced domain surfaces plus a small flat compatibility surface for common core helpers.
