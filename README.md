@@ -15,6 +15,7 @@ claiming global truth.
 - projection/cross-reality primitives (`external-seat-projection-admitted`, `external-referent-admitted`)
 - alignment aids (`checkpoint`, `seed`, `join`) without history merge semantics
 - continuity branch composites for scoped branch-addressable continuity material
+- local continuity review receipts for scoped compatibility and risk assessment
 - async-first storage adapters (`memory`, `localStorage`, `fs`) and lazy event stream helpers
 
 The kernel is intentionally explicit that:
@@ -24,6 +25,7 @@ The kernel is intentionally explicit that:
 - admission is not canonical truth
 - projection is not write authority
 - branch composite is not universal history
+- local review is not admission or proof authority
 
 ## Agent adoption guide
 
@@ -193,6 +195,20 @@ or state object. See [Continuity Branch Composites](docs/branch-composites.md).
 - branch closures define scoped sufficiency for operations such as transfer, render, inspect, debug, fork, summarize, import, mount, and admit.
 - forks inherit some branch heads and diverge on others; a fork is not merely a copy.
 
+## Local continuity review
+
+Existence is not trust. A continuity package, branch, branch composite, observer
+seat, agent, item, file, artifact, renderer view, transport envelope, or reality
+candidate is not trusted merely because it exists, was rendered, was transported,
+was generated, was imported, or contains replayable history. See
+[Local Continuity Review](docs/local-continuity-review.md).
+
+- review receipts are local compatibility and risk assessments, not proof authority.
+- review may inspect capabilities, privileged powers, suspicious rule changes, hidden authority claims, branch closure gaps, provenance, stale heads, summaries, and projection deltas.
+- review decisions may accept, reject, defer, fork, sandbox, quarantine, ignore, summarize, admit, admit with constraints, or preserve candidate-only material.
+- `accept` means locally compatible for inspection, use, or supporting material; `admit` means contributing to local continuity projection or admitted branch composition only when paired with local admission.
+- future continuity review agents may produce review receipts, but they do not create truth, perform automatic merge, override local RBC, or become proof authority.
+
 ## Modules
 
 - `continuity.js`: continuity builders, immutability, admissibility evaluation, state reduction
@@ -200,6 +216,7 @@ or state object. See [Continuity Branch Composites](docs/branch-composites.md).
 - `storage.js`: async continuity store contract, stream normalization, stream replay helpers
 - `rbc.js`: referee/rule evaluation helpers
 - `branch-composites.js`: continuity branch composite manifests, cascade decisions, projection bases, and closures
+- `local-continuity-review.js`: local review receipts, findings, constraints, projection deltas, and review intents
 - `seat-map-domain.js`: seat-map derivation and rulebook for continuity branching
 - `projection.js`: seat projection and external referent admission
 - `checkpoints.js`: checkpoint referents and bounded alignment

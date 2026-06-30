@@ -13,6 +13,7 @@ const rbcCompatibility = require("./rbc-compatibility");
 const topology = require("./topology");
 const blends = require("./blends");
 const branchComposites = require("./branch-composites");
+const localReview = require("./local-continuity-review");
 const ids = require("./ids");
 const storage = require("./storage");
 const memoryAdapter = require("../adapters/memory");
@@ -46,6 +47,7 @@ module.exports = {
   rbcCompatibility,
   topology,
   branchComposites,
+  localReview,
   experimental: {
     blends,
   },

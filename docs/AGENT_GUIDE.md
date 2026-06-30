@@ -66,6 +66,8 @@ checkpoint != full replay
 seed != full history
 branch composite != universal log
 renderer branch != object authority
+local review != admission
+review receipt != proof authority
 ```
 
 These distinctions are not naming preferences. They are the safety boundaries that keep local continuity honest.
@@ -159,6 +161,16 @@ art or debug branch. `virtualia-2d` can render admitted branch subsets without
 making a view authoritative. `omega-ect` can inspect files, videos, repos,
 agent work, and production artifacts as composites without silently merging
 them or redefining kernel doctrine.
+
+Use local continuity review before making candidate continuity material locally
+usable. A continuity package, branch composite, observer-seat material, renderer
+view, file, artifact, or reality candidate is not trusted because it exists,
+was transported, was rendered, or has replayable history. Review receipts can
+record accept, reject, defer, fork, sandbox, quarantine, ignore, summarize,
+admit, admit-with-constraints, or candidate-only recommendations, plus findings,
+constraints, evidence refs, and projection deltas. A review receipt informs
+local admission; it does not perform admission, override RBC, merge histories,
+or act as global proof authority.
 
 ## Minimum tests for a new domain adapter
 
