@@ -14,6 +14,7 @@ claiming global truth.
 - seat-map domain adapter for seat-based continuity (`seat-dag-continuity-v2`)
 - projection/cross-reality primitives (`external-seat-projection-admitted`, `external-referent-admitted`)
 - alignment aids (`checkpoint`, `seed`, `join`) without history merge semantics
+- continuity branch composites for scoped branch-addressable continuity material
 - async-first storage adapters (`memory`, `localStorage`, `fs`) and lazy event stream helpers
 
 The kernel is intentionally explicit that:
@@ -22,6 +23,7 @@ The kernel is intentionally explicit that:
 - visibility is not admission
 - admission is not canonical truth
 - projection is not write authority
+- branch composite is not universal history
 
 ## Agent adoption guide
 
@@ -177,12 +179,27 @@ The first-pass topology layer provides bounded primitives for relating continuit
 - validate-and-admit wrappers append bridge, mount, or blend candidate happenings only after candidate validation admits.
 - seed slice exports use demo fingerprint language; `computeContinuitySliceHash()` remains a deprecated compatibility alias for `computeContinuitySliceDemoFingerprint()`.
 
+## Continuity branch composites
+
+Continuity is compositional and branch-addressable. A referent, observer seat,
+artifact, file, renderer view, scenario, item, or production object may be
+constituted by a continuity branch composite rather than by one monolithic log
+or state object. See [Continuity Branch Composites](docs/branch-composites.md).
+
+- branch descriptors identify scoped continuity branches by role, head, and subject.
+- branch composite manifests collect branch descriptors, policy, receipts, checkpoints, and non-claims.
+- rulebook/RBC cascades may classify branches as required, admitted, permitted, ignored, rejected, deferred, summarized, or candidate-only.
+- projection bases use admitted relevant branches, not all transported, stored, imported, or rendered branches.
+- branch closures define scoped sufficiency for operations such as transfer, render, inspect, debug, fork, summarize, import, mount, and admit.
+- forks inherit some branch heads and diverge on others; a fork is not merely a copy.
+
 ## Modules
 
 - `continuity.js`: continuity builders, immutability, admissibility evaluation, state reduction
 - `happenings.js`: event shape helpers (`createHappening`, `ensureHappeningIdentity`)
 - `storage.js`: async continuity store contract, stream normalization, stream replay helpers
 - `rbc.js`: referee/rule evaluation helpers
+- `branch-composites.js`: continuity branch composite manifests, cascade decisions, projection bases, and closures
 - `seat-map-domain.js`: seat-map derivation and rulebook for continuity branching
 - `projection.js`: seat projection and external referent admission
 - `checkpoints.js`: checkpoint referents and bounded alignment

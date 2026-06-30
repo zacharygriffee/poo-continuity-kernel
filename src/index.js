@@ -12,6 +12,7 @@ const segments = require("./segments");
 const rbcCompatibility = require("./rbc-compatibility");
 const topology = require("./topology");
 const blends = require("./blends");
+const branchComposites = require("./branch-composites");
 const ids = require("./ids");
 const storage = require("./storage");
 const memoryAdapter = require("../adapters/memory");
@@ -44,6 +45,7 @@ module.exports = {
   segments,
   rbcCompatibility,
   topology,
+  branchComposites,
   experimental: {
     blends,
   },

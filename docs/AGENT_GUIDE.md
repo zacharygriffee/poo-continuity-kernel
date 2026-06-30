@@ -64,6 +64,8 @@ receipt != canonical proof
 join != merge
 checkpoint != full replay
 seed != full history
+branch composite != universal log
+renderer branch != object authority
 ```
 
 These distinctions are not naming preferences. They are the safety boundaries that keep local continuity honest.
@@ -143,6 +145,20 @@ Use projection when an external referent becomes observable. Projection does not
 Use checkpoints and seeds as bounded replay/admission aids. They are not replacements for full history unless the domain explicitly defines that policy outside the kernel.
 
 Use joins as forward-compatible alignment surfaces. A join is not a merge and does not reconcile incompatible histories.
+
+Use branch composites when a subject is constituted by multiple scoped branches:
+identity, context, capability, custody, provenance, renderer, debug, metric,
+fork-lineage, rulebook/RBC, summary, or checkpoint material. A transported or
+stored branch composite is candidate material until a receiving rulebook/RBC
+cascade classifies which branches are required, admitted, permitted, ignored,
+rejected, deferred, summarized, or candidate-only.
+
+Downstream repos should not own this primitive. `poo-twine` can keep compact
+local composites for story/referent continuity without inlining every possible
+art or debug branch. `virtualia-2d` can render admitted branch subsets without
+making a view authoritative. `omega-ect` can inspect files, videos, repos,
+agent work, and production artifacts as composites without silently merging
+them or redefining kernel doctrine.
 
 ## Minimum tests for a new domain adapter
 
