@@ -69,6 +69,8 @@ renderer branch != object authority
 local review != admission
 review receipt != proof authority
 RBC cascade != hidden engine authority
+action declaration != happening
+action invocation != admission
 ```
 
 These distinctions are not naming preferences. They are the safety boundaries that keep local continuity honest.
@@ -182,6 +184,14 @@ deferred, hidden, sandboxed, fork-required, admitted-with-constraints, or
 candidate-only. RBC cascade results are local participation policy, not global
 truth, automatic merge, transport admission, renderer authority, or hidden
 engine authority.
+
+Use action declarations to describe continuity-facing proposal-potential, not
+authority. An action says what candidate happening might be proposed from a
+situation. RBC decides whether the action can participate, projection decides
+whether a seat can see or use it, invocation creates candidate happening intent,
+and only admitted happenings enter causal history. Renderer buttons, implicit
+local tool actions, and imported action branches are not permission, admission,
+portable authority, or executable power by default.
 
 ## Minimum tests for a new domain adapter
 

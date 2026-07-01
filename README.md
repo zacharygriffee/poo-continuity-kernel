@@ -12,6 +12,7 @@ claiming global truth.
 - admissibility receipts (`admitted`, `rejected`, `deferred`)
 - RBC evaluator flow with explicit rule decisions
 - Rulebook/RBC cascade primitives for layered local participation policy
+- continuity action declarations for proposal-potential, not authority
 - seat-map domain adapter for seat-based continuity (`seat-dag-continuity-v2`)
 - projection/cross-reality primitives (`external-seat-projection-admitted`, `external-referent-admitted`)
 - alignment aids (`checkpoint`, `seed`, `join`) without history merge semantics
@@ -28,6 +29,7 @@ The kernel is intentionally explicit that:
 - branch composite is not universal history
 - local review is not admission or proof authority
 - RBC cascade is local participation policy, not global truth
+- action declaration is not happening, permission, or executable authority
 
 ## Agent adoption guide
 
@@ -225,6 +227,19 @@ in a local observer/system reality. See [Rulebook Cascade / RBC Cascade](docs/rb
 - renderer participation is scoped; renderer output is not continuity authority.
 - transport/import is candidate material, not admission.
 
+## Continuity actions
+
+Actions are continuity-facing affordance material: structured proposal-potential
+that describes what can be attempted from a situation. They are not happenings,
+admission, permission, renderer truth, or executable authority. See
+[Continuity Actions / Action Declarations](docs/actions.md).
+
+- action declarations describe candidate happening intent without appending history.
+- action participation is local and may be accepted, rejected, hidden, visible, actable, sandboxed, constrained, candidate-only, replaced, deprecated, unsupported, or deferred.
+- projected affordances can reference actions without admitting them.
+- invocation produces proposal material; only admitted happenings enter causal history.
+- explicit actions can travel as candidate material; implicit renderer/tool/UI actions are not portable authority.
+
 ## Modules
 
 - `continuity.js`: continuity builders, immutability, admissibility evaluation, state reduction
@@ -232,6 +247,7 @@ in a local observer/system reality. See [Rulebook Cascade / RBC Cascade](docs/rb
 - `storage.js`: async continuity store contract, stream normalization, stream replay helpers
 - `rbc.js`: referee/rule evaluation helpers
 - `rbc-cascade.js`: layered local participation policy results, findings, constraints, and decision receipts
+- `actions.js`: action declarations, participation decisions, projected affordances, invocations, and candidate happening intents
 - `branch-composites.js`: continuity branch composite manifests, cascade decisions, projection bases, and closures
 - `local-continuity-review.js`: local review receipts, findings, constraints, projection deltas, and review intents
 - `seat-map-domain.js`: seat-map derivation and rulebook for continuity branching
