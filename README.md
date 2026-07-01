@@ -11,6 +11,7 @@ claiming global truth.
 - happening normalization + collision-resistant identifiers (`obs-<sha256-random>`, `h-<sha256-random>`, `ref-<sha256-random>`)
 - admissibility receipts (`admitted`, `rejected`, `deferred`)
 - RBC evaluator flow with explicit rule decisions
+- Rulebook/RBC cascade primitives for layered local participation policy
 - seat-map domain adapter for seat-based continuity (`seat-dag-continuity-v2`)
 - projection/cross-reality primitives (`external-seat-projection-admitted`, `external-referent-admitted`)
 - alignment aids (`checkpoint`, `seed`, `join`) without history merge semantics
@@ -26,6 +27,7 @@ The kernel is intentionally explicit that:
 - projection is not write authority
 - branch composite is not universal history
 - local review is not admission or proof authority
+- RBC cascade is local participation policy, not global truth
 
 ## Agent adoption guide
 
@@ -209,12 +211,27 @@ was generated, was imported, or contains replayable history. See
 - `accept` means locally compatible for inspection, use, or supporting material; `admit` means contributing to local continuity projection or admitted branch composition only when paired with local admission.
 - future continuity review agents may produce review receipts, but they do not create truth, perform automatic merge, override local RBC, or become proof authority.
 
+## Rulebook / RBC cascade
+
+A Rulebook Cascade is a layered local continuity policy surface. It evaluates
+whether happenings, branches, composites, observer seats, contexts, render
+surfaces, imports, lineage, capabilities, and projection claims may participate
+in a local observer/system reality. See [Rulebook Cascade / RBC Cascade](docs/rbc-cascade.md).
+
+- RBC decisions are local and scoped.
+- cascade layers preserve individual findings, constraints, and decisions.
+- decisions may be admitted, accepted, rejected, deferred, ignored, hidden, sandboxed, quarantined, fork-required, admitted-with-constraints, candidate-only, summarized, or unsupported.
+- branch composites may receive child branch decisions without forcing every branch to be admitted together.
+- renderer participation is scoped; renderer output is not continuity authority.
+- transport/import is candidate material, not admission.
+
 ## Modules
 
 - `continuity.js`: continuity builders, immutability, admissibility evaluation, state reduction
 - `happenings.js`: event shape helpers (`createHappening`, `ensureHappeningIdentity`)
 - `storage.js`: async continuity store contract, stream normalization, stream replay helpers
 - `rbc.js`: referee/rule evaluation helpers
+- `rbc-cascade.js`: layered local participation policy results, findings, constraints, and decision receipts
 - `branch-composites.js`: continuity branch composite manifests, cascade decisions, projection bases, and closures
 - `local-continuity-review.js`: local review receipts, findings, constraints, projection deltas, and review intents
 - `seat-map-domain.js`: seat-map derivation and rulebook for continuity branching

@@ -68,6 +68,7 @@ branch composite != universal log
 renderer branch != object authority
 local review != admission
 review receipt != proof authority
+RBC cascade != hidden engine authority
 ```
 
 These distinctions are not naming preferences. They are the safety boundaries that keep local continuity honest.
@@ -171,6 +172,16 @@ admit, admit-with-constraints, or candidate-only recommendations, plus findings,
 constraints, evidence refs, and projection deltas. A review receipt informs
 local admission; it does not perform admission, override RBC, merge histories,
 or act as global proof authority.
+
+Use RBC cascades when local policy needs layered participation decisions across
+happenings, branches, branch composites, observer seats, render surfaces,
+imports, lineage, capabilities, rulebook changes, projection claims, and
+candidate material. A cascade can preserve layer-by-layer findings while
+returning a scoped final decision such as admitted, accepted, rejected,
+deferred, hidden, sandboxed, fork-required, admitted-with-constraints, or
+candidate-only. RBC cascade results are local participation policy, not global
+truth, automatic merge, transport admission, renderer authority, or hidden
+engine authority.
 
 ## Minimum tests for a new domain adapter
 

@@ -3,6 +3,7 @@ const happenings = require("./happenings");
 const referents = require("./referents");
 const receipts = require("./receipts");
 const rbc = require("./rbc");
+const rbcCascade = require("./rbc-cascade");
 const projection = require("./projection");
 const seatMapDomain = require("./seat-map-domain");
 const checkpoints = require("./checkpoints");
@@ -39,6 +40,7 @@ module.exports = {
   },
   receipts,
   rbc,
+  rbcCascade,
   projection,
   checkpoints,
   seeds,
